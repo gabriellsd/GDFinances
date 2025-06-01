@@ -6,7 +6,7 @@ document.body.classList.toggle('dark', prefersDark);
 document.body.classList.toggle('light', !prefersDark);
 
 // Variáveis globais
-let db;
+let sqliteDB;
 let token = localStorage.getItem('token');
 let currentUser = null;
 let SQL;
@@ -123,7 +123,7 @@ async function loadFromIndexedDB() {
 
 // Modificar a função saveDatabase para usar IndexedDB
 async function saveDatabase() {
-    const data = db.export();
+    const data = sqliteDB.export();
     const array = Array.from(data);
     localStorage.setItem('database', array.toString());
     
@@ -146,21 +146,21 @@ async function initSQLite() {
         if (indexedDBData) {
             console.log('Carregando banco de dados do IndexedDB...');
             const uint8Array = new Uint8Array(indexedDBData);
-            db = new SQL.Database(uint8Array);
+            sqliteDB = new SQL.Database(uint8Array);
         } else {
             // Se não houver dados no IndexedDB, tentar localStorage
             const localData = localStorage.getItem('database');
             if (localData) {
                 console.log('Carregando banco de dados do localStorage...');
                 const uint8Array = new Uint8Array(localData.split(',').map(Number));
-                db = new SQL.Database(uint8Array);
+                sqliteDB = new SQL.Database(uint8Array);
                 // Salvar no IndexedDB para futuro
                 await saveToIndexedDB(Array.from(uint8Array));
             } else {
                 console.log('Criando novo banco de dados...');
-                db = new SQL.Database();
+                sqliteDB = new SQL.Database();
                 // Criar as tabelas necessárias
-                db.run(`
+                sqliteDB.run(`
                     CREATE TABLE IF NOT EXISTS users (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         email TEXT UNIQUE NOT NULL,
@@ -340,17 +340,17 @@ async function createAccount(name, type, balance, color = '#10B981', icon = 'ban
     try {
         if (!currentUser) return false;
         
-        db.run(`
+        sqliteDB.run(`
             INSERT INTO accounts (user_id, name, type, balance, color, icon)
             VALUES (?, ?, ?, ?, ?, ?)
         `, [currentUser.id, name, type, balance, color, icon]);
         
         if (type === 'credit_card' && creditCardInfo) {
-            const stmt = db.prepare('SELECT last_insert_rowid() as id');
+            const stmt = sqliteDB.prepare('SELECT last_insert_rowid() as id');
             const { id } = stmt.getAsObject();
             stmt.free();
             
-            db.run(`
+            sqliteDB.run(`
                 INSERT INTO credit_cards (account_id, brand, closing_day, due_day, credit_limit)
                 VALUES (?, ?, ?, ?, ?)
             `, [id, creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit]);
@@ -368,7 +368,7 @@ async function getAccounts() {
     try {
         if (!currentUser) return [];
         
-        const stmt = db.prepare(`
+        const stmt = sqliteDB.prepare(`
             SELECT * FROM accounts 
             WHERE user_id = ?
             ORDER BY name
@@ -392,14 +392,14 @@ async function updateAccount(id, name, type, balance, color, icon, creditCardInf
     try {
         if (!currentUser) return false;
         
-        db.run(`
+        sqliteDB.run(`
             UPDATE accounts 
             SET name = ?, type = ?, balance = ?, color = ?, icon = ?
             WHERE id = ? AND user_id = ?
         `, [name, type, balance, color, icon, id, currentUser.id]);
         
         if (type === 'credit_card' && creditCardInfo) {
-            db.run(`
+            sqliteDB.run(`
                 UPDATE credit_cards 
                 SET brand = ?, closing_day = ?, due_day = ?, credit_limit = ?
                 WHERE account_id = ?
@@ -418,7 +418,7 @@ async function deleteAccount(id) {
     try {
         if (!currentUser) return false;
         
-        db.run('DELETE FROM accounts WHERE id = ? AND user_id = ?', [id, currentUser.id]);
+        sqliteDB.run('DELETE FROM accounts WHERE id = ? AND user_id = ?', [id, currentUser.id]);
         saveDatabase();
         
         await renderAccounts();
@@ -438,20 +438,20 @@ async function createTransaction(accountId, type, amount, category, date, descri
         if (!currentUser) return false;
         
         // Verifica se a conta pertence ao usuário
-        const stmt = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?');
+        const stmt = sqliteDB.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?');
         const account = stmt.getAsObject([accountId, currentUser.id]);
         stmt.free();
         
         if (!account.id) return false;
         
-        db.run(`
+        sqliteDB.run(`
             INSERT INTO transactions (account_id, type, amount, category, date, description, tags)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [accountId, type, amount, category, date, description, tags]);
         
         // Atualiza o saldo da conta
         const balanceChange = type === 'expense' ? -amount : amount;
-        db.run(`
+        sqliteDB.run(`
             UPDATE accounts 
             SET balance = balance + ? 
             WHERE id = ?
@@ -500,7 +500,7 @@ async function getTransactions(filters = {}) {
         
         query += ' ORDER BY t.date DESC';
         
-        const stmt = db.prepare(query);
+        const stmt = sqliteDB.prepare(query);
         const transactions = [];
         
         while (stmt.step()) {
