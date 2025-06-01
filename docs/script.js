@@ -49,58 +49,149 @@ if (savedTheme) {
     document.body.classList.add(savedTheme);
 }
 
-// Inicialização do SQLite
+// Funções para persistência no IndexedDB
+async function openIndexedDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('GDFinances', 1);
+        
+        request.onerror = () => {
+            console.error('Erro ao abrir IndexedDB');
+            reject(request.error);
+        };
+        
+        request.onsuccess = () => {
+            resolve(request.result);
+        };
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('database')) {
+                db.createObjectStore('database');
+            }
+        };
+    });
+}
+
+async function saveToIndexedDB(data) {
+    try {
+        const idb = await openIndexedDB();
+        const transaction = idb.transaction(['database'], 'readwrite');
+        const store = transaction.objectStore('database');
+        
+        return new Promise((resolve, reject) => {
+            const request = store.put(data, 'sqliteDB');
+            
+            request.onsuccess = () => {
+                console.log('Banco de dados salvo no IndexedDB');
+                resolve(true);
+            };
+            
+            request.onerror = () => {
+                console.error('Erro ao salvar no IndexedDB');
+                reject(request.error);
+            };
+        });
+    } catch (error) {
+        console.error('Erro ao salvar no IndexedDB:', error);
+        return false;
+    }
+}
+
+async function loadFromIndexedDB() {
+    try {
+        const idb = await openIndexedDB();
+        const transaction = idb.transaction(['database'], 'readonly');
+        const store = transaction.objectStore('database');
+        
+        return new Promise((resolve, reject) => {
+            const request = store.get('sqliteDB');
+            
+            request.onsuccess = () => {
+                resolve(request.result);
+            };
+            
+            request.onerror = () => {
+                console.error('Erro ao carregar do IndexedDB');
+                reject(request.error);
+            };
+        });
+    } catch (error) {
+        console.error('Erro ao carregar do IndexedDB:', error);
+        return null;
+    }
+}
+
+// Modificar a função saveDatabase para usar IndexedDB
+async function saveDatabase() {
+    const data = db.export();
+    const array = Array.from(data);
+    localStorage.setItem('database', array.toString());
+    
+    // Salvar também no IndexedDB
+    await saveToIndexedDB(array);
+}
+
+// Modificar a função initSQLite para carregar do IndexedDB
 async function initSQLite() {
     try {
         console.log('Iniciando SQLite...');
-        // Carrega o SQL.js WebAssembly
         const sqlPromise = await initSqlJs({
             locateFile: file => `lib/${file}`
         });
         SQL = sqlPromise;
         console.log('SQL.js carregado com sucesso!');
         
-        // Cria ou carrega o banco de dados
-        const dbData = localStorage.getItem('database');
-        if (dbData) {
-            console.log('Carregando banco de dados existente...');
-            const uint8Array = new Uint8Array(dbData.split(',').map(Number));
+        // Tentar carregar do IndexedDB primeiro
+        const indexedDBData = await loadFromIndexedDB();
+        if (indexedDBData) {
+            console.log('Carregando banco de dados do IndexedDB...');
+            const uint8Array = new Uint8Array(indexedDBData);
             db = new SQL.Database(uint8Array);
         } else {
-            console.log('Criando novo banco de dados...');
-            db = new SQL.Database();
-            // Cria as tabelas necessárias
-            db.run(`
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    email TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL
-                );
-                
-                CREATE TABLE IF NOT EXISTS accounts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    balance REAL NOT NULL,
-                    color TEXT,
-                    icon TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
-                );
-                
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    account_id INTEGER NOT NULL,
-                    type TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    category TEXT,
-                    date TEXT NOT NULL,
-                    description TEXT,
-                    tags TEXT,
-                    FOREIGN KEY (account_id) REFERENCES accounts(id)
-                );
-            `);
-            saveDatabase();
+            // Se não houver dados no IndexedDB, tentar localStorage
+            const localData = localStorage.getItem('database');
+            if (localData) {
+                console.log('Carregando banco de dados do localStorage...');
+                const uint8Array = new Uint8Array(localData.split(',').map(Number));
+                db = new SQL.Database(uint8Array);
+                // Salvar no IndexedDB para futuro
+                await saveToIndexedDB(Array.from(uint8Array));
+            } else {
+                console.log('Criando novo banco de dados...');
+                db = new SQL.Database();
+                // Criar as tabelas necessárias
+                db.run(`
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        email TEXT UNIQUE NOT NULL,
+                        password TEXT NOT NULL
+                    );
+                    
+                    CREATE TABLE IF NOT EXISTS accounts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        balance REAL NOT NULL,
+                        color TEXT,
+                        icon TEXT,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    );
+                    
+                    CREATE TABLE IF NOT EXISTS transactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        account_id INTEGER NOT NULL,
+                        type TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        category TEXT,
+                        date TEXT NOT NULL,
+                        description TEXT,
+                        tags TEXT,
+                        FOREIGN KEY (account_id) REFERENCES accounts(id)
+                    );
+                `);
+                await saveDatabase();
+            }
         }
         console.log('SQLite inicializado com sucesso!');
         return true;
@@ -110,124 +201,89 @@ async function initSQLite() {
     }
 }
 
-// Salva o banco de dados no localStorage
-function saveDatabase() {
-    const data = db.export();
-    const array = Array.from(data);
-    localStorage.setItem('database', array.toString());
-}
-
 // Funções de autenticação
 async function login(email, password) {
     try {
         console.log('Iniciando processo de login...', { email });
         
-        if (!db) {
-            console.log('Banco de dados não inicializado, tentando inicializar...');
-            const initialized = await initSQLite();
-            if (!initialized) {
-                console.error('Falha ao inicializar banco de dados');
-                return false;
-            }
-            console.log('Banco de dados inicializado com sucesso');
-        }
-
-        // Primeiro, vamos verificar se o usuário existe
-        let stmt = db.prepare('SELECT COUNT(*) as count FROM users');
-        let result = stmt.getAsObject();
-        stmt.free();
-        console.log('Total de usuários no banco:', result.count);
-
-        // Agora vamos buscar o usuário específico
-        console.log('Buscando usuário com email e senha fornecidos...');
-        stmt = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?');
-        const row = stmt.getAsObject([email, password]);
-        stmt.free();
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
         
-        console.log('Resultado da busca:', { 
-            encontrado: !!row.id,
-            id: row.id,
-            emailEncontrado: row.email
-        });
+        console.log('Login bem-sucedido!', { userId: user.uid });
         
-        if (row.id) {
-            console.log('Login bem-sucedido! Configurando token e redirecionando...');
-            token = btoa(email);
-            localStorage.setItem('token', token);
-            currentUser = { id: row.id, email };
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            updateDashboardOverview();
-            return true;
-        }
+        // Salvar token e dados do usuário
+        token = await user.getIdToken();
+        localStorage.setItem('token', token);
+        currentUser = { id: user.uid, email: user.email };
         
-        console.log('Credenciais inválidas');
-        return false;
+        // Atualizar interface
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        updateDashboardOverview();
+        return true;
     } catch (error) {
-        console.error('Erro detalhado no login:', error);
+        console.error('Erro no login:', error.code, error.message);
         return false;
     }
 }
 
 async function register(email, password) {
     try {
-        console.log('Tentando registrar...', { email });
+        console.log('Iniciando processo de registro...', { email });
         
-        if (!db) {
-            console.log('Banco de dados não inicializado, tentando inicializar...');
-            const initialized = await initSQLite();
-            if (!initialized) {
-                console.error('Falha ao inicializar banco de dados');
-                return false;
-            }
-        }
-
-        try {
-            // Primeiro, vamos verificar se o usuário já existe
-            let stmt = db.prepare('SELECT COUNT(*) as count FROM users WHERE email = ?');
-            let result = stmt.getAsObject([email]);
-            stmt.free();
-            
-            if (result.count > 0) {
-                console.log('Email já cadastrado');
-                return false;
-            }
-
-            console.log('Inserindo novo usuário...');
-            db.run('INSERT INTO users (email, password) VALUES (?, ?)', [email, password]);
-            saveDatabase();
-            
-            // Busca o ID do usuário recém-criado
-            stmt = db.prepare('SELECT id FROM users WHERE email = ?');
-            const row = stmt.getAsObject([email]);
-            stmt.free();
-            
-            console.log('Usuário criado com sucesso:', row);
-            
-            token = btoa(email);
-            localStorage.setItem('token', token);
-            currentUser = { id: row.id, email };
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            updateDashboardOverview();
-            return true;
-        } catch (err) {
-            console.error('Erro ao registrar:', err);
-            return false;
-        }
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        console.log('Registro bem-sucedido!', { userId: user.uid });
+        
+        // Criar documento do usuário no Firestore
+        await db.collection('users').doc(user.uid).set({
+            email: user.email,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Salvar token e dados do usuário
+        token = await user.getIdToken();
+        localStorage.setItem('token', token);
+        currentUser = { id: user.uid, email: user.email };
+        
+        // Atualizar interface
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        updateDashboardOverview();
+        return true;
     } catch (error) {
-        console.error('Erro no registro:', error);
+        console.error('Erro no registro:', error.code, error.message);
         return false;
     }
 }
 
 function logout() {
-    token = null;
-    currentUser = null;
-    localStorage.removeItem('token');
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('dashboard').style.display = 'none';
+    auth.signOut().then(() => {
+        token = null;
+        currentUser = null;
+        localStorage.removeItem('token');
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+    }).catch((error) => {
+        console.error('Erro ao fazer logout:', error);
+    });
 }
+
+// Verificar estado da autenticação ao carregar a página
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        console.log('Usuário já autenticado:', user.email);
+        currentUser = { id: user.uid, email: user.email };
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        updateDashboardOverview();
+    } else {
+        console.log('Usuário não autenticado');
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+    }
+});
 
 // Funções de conta
 async function createAccount(name, type, balance, color = '#10B981', icon = 'bank', creditCardInfo = {}) {
