@@ -1,81 +1,73 @@
 # GDFinances
 
-Sistema de gerenciamento de finanças pessoais inspirado no Mobills.
+GDFinances é um sistema de gerenciamento de finanças pessoais moderno e intuitivo, desenvolvido com JavaScript puro e Firebase.
 
-## Funcionalidades
+## 🌟 Funcionalidades
 
-### Sistema de Autenticação
-- Login com SQLite via sqljs
-- Hash SHA-256 para senhas
-- Usuários pré-configurados
+- ✅ Autenticação segura com Firebase
+- 💰 Gerenciamento de múltiplas contas
+- 📊 Dashboard com visão geral das finanças
+- 💳 Controle de receitas e despesas
+- 📈 Gráficos de fluxo de caixa
+- 🎯 Sistema de metas financeiras
+- 📱 Interface responsiva
+- 🌓 Tema claro/escuro
 
-### Interface Moderna
-- Design responsivo
-- Tema claro/escuro
-- Menu lateral com ícones
-- Dashboard com cards e gráficos
-- Layout similar ao Mobills
+## 🚀 Tecnologias
 
-### Recursos
-- Gerenciamento de contas (CRUD)
-- Sistema de transações
-- Orçamentos
-- Metas financeiras
-- Gráficos com Chart.js
-- Exportação CSV
-
-## Tecnologias
-
-### Frontend:
 - HTML5
-- CSS3 (com variáveis CSS e Flexbox/Grid)
+- CSS3
 - JavaScript (Vanilla)
+- Firebase (Autenticação e Banco de Dados)
 - Chart.js para gráficos
-- sql.js para banco local
-- Papa Parse para CSV
+- GitHub Pages para hospedagem
 
-### Backend:
-- Python
-- Flask
-- SQLite
-- JWT para autenticação
-
-## Instalação
+## 🔧 Configuração Local
 
 1. Clone o repositório:
 ```bash
 git clone https://github.com/gabriellsd/GDFinances.git
+```
+
+2. Navegue até a pasta do projeto:
+```bash
 cd GDFinances
 ```
 
-2. Instale as dependências do Python:
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-pip install -r requirements.txt
+3. Abra o arquivo `docs/index.html` em seu navegador ou use um servidor local.
+
+## 📦 Estrutura do Projeto
+
+```
+docs/
+├── index.html          # Página principal
+├── styles.css          # Estilos
+├── script.js           # Lógica principal
+├── firebase-config.js  # Configuração do Firebase
+└── lib/               # Bibliotecas externas
+    ├── chart.min.js
+    └── papaparse.min.js
 ```
 
-3. Inicie o servidor:
-```bash
-python server.py
-```
+## 🔐 Segurança
 
-4. Abra o navegador e acesse:
-```
-http://localhost:5000
-```
+- Autenticação segura via Firebase
+- Tokens JWT para sessões
+- Dados criptografados em trânsito
+- Regras de segurança do Firestore
 
-## Desenvolvimento
+## 🌐 Demo
 
-Para contribuir com o projeto:
+O projeto está disponível em: [https://gabriellsd.github.io/GDFinances/](https://gabriellsd.github.io/GDFinances/)
 
-1. Faça um fork do repositório
-2. Crie uma branch para sua feature (`git checkout -b feature/MinhaFeature`)
-3. Faça commit das mudanças (`git commit -m 'Adicionando nova feature'`)
-4. Push para a branch (`git push origin feature/MinhaFeature`)
-5. Abra um Pull Request
-
-## Licença
+## 📝 Licença
 
 Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+## 🤝 Contribuição
+
+Contribuições são sempre bem-vindas! Por favor, leia o [guia de contribuição](CONTRIBUTING.md) primeiro.
+
+## 📫 Contato
+
+Se você tiver alguma dúvida ou sugestão, por favor, abra uma issue ou entre em contato.
