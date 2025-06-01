@@ -223,6 +223,26 @@ async function login(email, password) {
         return true;
     } catch (error) {
         console.error('Erro no login:', error.code, error.message);
+        let errorMessage = 'Email ou senha inválidos';
+        
+        switch (error.code) {
+            case 'auth/user-not-found':
+                errorMessage = 'Usuário não encontrado';
+                break;
+            case 'auth/wrong-password':
+                errorMessage = 'Senha incorreta';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = 'Email inválido';
+                break;
+            case 'auth/too-many-requests':
+                errorMessage = 'Muitas tentativas. Tente novamente mais tarde';
+                break;
+        }
+        
+        const errorElement = document.getElementById('login-error');
+        errorElement.textContent = errorMessage;
+        errorElement.style.display = 'block';
         return false;
     }
 }
@@ -230,6 +250,11 @@ async function login(email, password) {
 async function register(email, password) {
     try {
         console.log('Iniciando processo de registro...', { email });
+        
+        // Validar senha
+        if (password.length < 6) {
+            throw { code: 'auth/weak-password', message: 'A senha deve ter pelo menos 6 caracteres' };
+        }
         
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
@@ -248,12 +273,37 @@ async function register(email, password) {
         currentUser = { id: user.uid, email: user.email };
         
         // Atualizar interface
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboardOverview();
+        document.getElementById('registerModal').classList.remove('active');
+        setTimeout(() => {
+            document.getElementById('registerModal').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'flex';
+            updateDashboardOverview();
+        }, 300);
+        
         return true;
     } catch (error) {
         console.error('Erro no registro:', error.code, error.message);
+        let errorMessage = 'Erro ao criar conta';
+        
+        switch (error.code) {
+            case 'auth/email-already-in-use':
+                errorMessage = 'Este email já está em uso';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = 'Email inválido';
+                break;
+            case 'auth/weak-password':
+                errorMessage = 'A senha deve ter pelo menos 6 caracteres';
+                break;
+            case 'auth/operation-not-allowed':
+                errorMessage = 'Criação de conta desativada';
+                break;
+        }
+        
+        const errorElement = document.getElementById('register-error');
+        errorElement.textContent = errorMessage;
+        errorElement.style.display = 'block';
         return false;
     }
 }
