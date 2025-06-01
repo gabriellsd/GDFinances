@@ -51,51 +51,58 @@ if (savedTheme) {
 
 // Inicialização do SQLite
 async function initSQLite() {
-    // Carrega o SQL.js WebAssembly
-    const sqlPromise = await initSqlJs({
-        locateFile: file => `lib/${file}`
-    });
-    SQL = sqlPromise;
-    
-    // Cria ou carrega o banco de dados
-    const dbData = localStorage.getItem('database');
-    if (dbData) {
-        const uint8Array = new Uint8Array(dbData.split(',').map(Number));
-        db = new SQL.Database(uint8Array);
-    } else {
-        db = new SQL.Database();
-        // Cria as tabelas necessárias
-        db.run(`
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
-            );
-            
-            CREATE TABLE IF NOT EXISTS accounts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                type TEXT NOT NULL,
-                balance REAL NOT NULL,
-                color TEXT,
-                icon TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-            
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                account_id INTEGER NOT NULL,
-                type TEXT NOT NULL,
-                amount REAL NOT NULL,
-                category TEXT,
-                date TEXT NOT NULL,
-                description TEXT,
-                tags TEXT,
-                FOREIGN KEY (account_id) REFERENCES accounts(id)
-            );
-        `);
-        saveDatabase();
+    try {
+        // Carrega o SQL.js WebAssembly
+        const sqlPromise = await initSqlJs({
+            locateFile: file => `lib/${file}`
+        });
+        SQL = sqlPromise;
+        
+        // Cria ou carrega o banco de dados
+        const dbData = localStorage.getItem('database');
+        if (dbData) {
+            const uint8Array = new Uint8Array(dbData.split(',').map(Number));
+            db = new SQL.Database(uint8Array);
+        } else {
+            db = new SQL.Database();
+            // Cria as tabelas necessárias
+            db.run(`
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL
+                );
+                
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    balance REAL NOT NULL,
+                    color TEXT,
+                    icon TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    category TEXT,
+                    date TEXT NOT NULL,
+                    description TEXT,
+                    tags TEXT,
+                    FOREIGN KEY (account_id) REFERENCES accounts(id)
+                );
+            `);
+            saveDatabase();
+        }
+        console.log('SQLite inicializado com sucesso!');
+        return true;
+    } catch (error) {
+        console.error('Erro ao inicializar SQLite:', error);
+        return false;
     }
 }
 
@@ -167,34 +174,65 @@ async function api(endpoint, method = 'GET', body = null) {
 
 // Funções de autenticação
 async function login(email, password) {
-    if (!db) {
-        await initSQLite();
-    }
+    try {
+        if (!db) {
+            const initialized = await initSQLite();
+            if (!initialized) {
+                return false;
+            }
+        }
 
-    const data = await api('login', 'POST', { email, password });
-    
-    if (data.success) {
-        token = data.token;
-        localStorage.setItem('token', token);
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboardOverview();
-        return true;
+        const stmt = db.prepare('SELECT id FROM users WHERE email = ? AND password = ?');
+        const row = stmt.getAsObject([email, password]);
+        stmt.free();
+        
+        if (row.id) {
+            token = btoa(email);
+            localStorage.setItem('token', token);
+            currentUser = { id: row.id, email };
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'flex';
+            updateDashboardOverview();
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('Erro no login:', error);
+        return false;
     }
-    
-    return false;
 }
 
 async function register(email, password) {
-    const data = await api('register', 'POST', { email, password });
-    
-    if (data.success) {
-        token = data.token;
-        localStorage.setItem('token', token);
-        return true;
+    try {
+        if (!db) {
+            const initialized = await initSQLite();
+            if (!initialized) {
+                return false;
+            }
+        }
+
+        try {
+            db.run('INSERT INTO users (email, password) VALUES (?, ?)', [email, password]);
+            saveDatabase();
+            token = btoa(email);
+            localStorage.setItem('token', token);
+            const stmt = db.prepare('SELECT id FROM users WHERE email = ?');
+            const row = stmt.getAsObject([email]);
+            stmt.free();
+            currentUser = { id: row.id, email };
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'flex';
+            updateDashboardOverview();
+            return true;
+        } catch (err) {
+            console.error('Erro ao registrar:', err);
+            return false;
+        }
+    } catch (error) {
+        console.error('Erro no registro:', error);
+        return false;
     }
-    
-    return false;
 }
 
 function logout() {
