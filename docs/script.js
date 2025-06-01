@@ -120,7 +120,7 @@ function saveDatabase() {
 // Funções de autenticação
 async function login(email, password) {
     try {
-        console.log('Tentando fazer login...', { email });
+        console.log('Iniciando processo de login...', { email });
         
         if (!db) {
             console.log('Banco de dados não inicializado, tentando inicializar...');
@@ -129,23 +129,29 @@ async function login(email, password) {
                 console.error('Falha ao inicializar banco de dados');
                 return false;
             }
+            console.log('Banco de dados inicializado com sucesso');
         }
 
         // Primeiro, vamos verificar se o usuário existe
         let stmt = db.prepare('SELECT COUNT(*) as count FROM users');
         let result = stmt.getAsObject();
         stmt.free();
-        console.log('Total de usuários:', result.count);
+        console.log('Total de usuários no banco:', result.count);
 
-        // Agora vamos buscar o usuário
+        // Agora vamos buscar o usuário específico
+        console.log('Buscando usuário com email e senha fornecidos...');
         stmt = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?');
         const row = stmt.getAsObject([email, password]);
         stmt.free();
         
-        console.log('Resultado da busca:', row);
+        console.log('Resultado da busca:', { 
+            encontrado: !!row.id,
+            id: row.id,
+            emailEncontrado: row.email
+        });
         
         if (row.id) {
-            console.log('Login bem-sucedido!');
+            console.log('Login bem-sucedido! Configurando token e redirecionando...');
             token = btoa(email);
             localStorage.setItem('token', token);
             currentUser = { id: row.id, email };
@@ -158,7 +164,7 @@ async function login(email, password) {
         console.log('Credenciais inválidas');
         return false;
     } catch (error) {
-        console.error('Erro no login:', error);
+        console.error('Erro detalhado no login:', error);
         return false;
     }
 }
