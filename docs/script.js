@@ -113,65 +113,6 @@ function saveDatabase() {
     localStorage.setItem('database', array.toString());
 }
 
-// Funções de API
-async function api(endpoint, method = 'GET', body = null) {
-    if (!db) {
-        await initSQLite();
-    }
-
-    // Simula uma API usando SQLite local
-    try {
-        let result;
-        
-        switch (endpoint) {
-            case 'login':
-                if (method === 'POST') {
-                    const { email, password } = body;
-                    const stmt = db.prepare('SELECT id FROM users WHERE email = ? AND password = ?');
-                    const row = stmt.getAsObject([email, password]);
-                    stmt.free();
-                    
-                    if (row.id) {
-                        token = btoa(email); // Token simples baseado no email
-                        localStorage.setItem('token', token);
-                        currentUser = { id: row.id, email };
-                        return { success: true, token };
-                    } else {
-                        return { success: false, message: 'Credenciais inválidas' };
-                    }
-                }
-                break;
-                
-            case 'register':
-                if (method === 'POST') {
-                    const { email, password } = body;
-                    try {
-                        db.run('INSERT INTO users (email, password) VALUES (?, ?)', [email, password]);
-                        saveDatabase();
-                        token = btoa(email);
-                        localStorage.setItem('token', token);
-                        const stmt = db.prepare('SELECT id FROM users WHERE email = ?');
-                        const row = stmt.getAsObject([email]);
-                        stmt.free();
-                        currentUser = { id: row.id, email };
-                        return { success: true, token };
-                    } catch (err) {
-                        return { success: false, message: 'Email já cadastrado' };
-                    }
-                }
-                break;
-                
-            default:
-                return { success: false, message: 'Endpoint não encontrado' };
-        }
-        
-        return result;
-    } catch (error) {
-        console.error('Erro na API:', error);
-        return { success: false, message: 'Erro interno' };
-    }
-}
-
 // Funções de autenticação
 async function login(email, password) {
     try {
@@ -245,57 +186,183 @@ function logout() {
 
 // Funções de conta
 async function createAccount(name, type, balance, color = '#10B981', icon = 'bank', creditCardInfo = {}) {
-    return await api('accounts', 'POST', { name, type, balance, color, icon, creditCardInfo });
+    try {
+        if (!currentUser) return false;
+        
+        db.run(`
+            INSERT INTO accounts (user_id, name, type, balance, color, icon)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `, [currentUser.id, name, type, balance, color, icon]);
+        
+        if (type === 'credit_card' && creditCardInfo) {
+            const stmt = db.prepare('SELECT last_insert_rowid() as id');
+            const { id } = stmt.getAsObject();
+            stmt.free();
+            
+            db.run(`
+                INSERT INTO credit_cards (account_id, brand, closing_day, due_day, credit_limit)
+                VALUES (?, ?, ?, ?, ?)
+            `, [id, creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit]);
+        }
+        
+        saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao criar conta:', error);
+        return false;
+    }
 }
 
 async function getAccounts() {
-    const response = await api('accounts');
-    return response.success ? response.data : [];
+    try {
+        if (!currentUser) return [];
+        
+        const stmt = db.prepare(`
+            SELECT * FROM accounts 
+            WHERE user_id = ?
+            ORDER BY name
+        `);
+        
+        const accounts = [];
+        while (stmt.step()) {
+            const row = stmt.getAsObject();
+            accounts.push(row);
+        }
+        stmt.free();
+        
+        return accounts;
+    } catch (error) {
+        console.error('Erro ao buscar contas:', error);
+        return [];
+    }
 }
 
 async function updateAccount(id, name, type, balance, color, icon, creditCardInfo = {}) {
-    return await api(`accounts/${id}`, 'PUT', { name, type, balance, color, icon, creditCardInfo });
+    try {
+        if (!currentUser) return false;
+        
+        db.run(`
+            UPDATE accounts 
+            SET name = ?, type = ?, balance = ?, color = ?, icon = ?
+            WHERE id = ? AND user_id = ?
+        `, [name, type, balance, color, icon, id, currentUser.id]);
+        
+        if (type === 'credit_card' && creditCardInfo) {
+            db.run(`
+                UPDATE credit_cards 
+                SET brand = ?, closing_day = ?, due_day = ?, credit_limit = ?
+                WHERE account_id = ?
+            `, [creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit, id]);
+        }
+        
+        saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao atualizar conta:', error);
+        return false;
+    }
 }
 
 async function deleteAccount(id) {
     try {
-        const response = await api(`accounts/${id}`, 'DELETE');
+        if (!currentUser) return false;
         
-        if (response.success) {
-            // Atualizar a interface
-            await renderAccounts();
-            await updateDashboardCards();
-            await updateCashFlowChart();
-            await updateExpensesChart();
-            return true;
-        } else {
-            alert(response.message || 'Erro ao excluir conta');
-            return false;
-        }
+        db.run('DELETE FROM accounts WHERE id = ? AND user_id = ?', [id, currentUser.id]);
+        saveDatabase();
+        
+        await renderAccounts();
+        await updateDashboardCards();
+        await updateCashFlowChart();
+        await updateExpensesChart();
+        return true;
     } catch (error) {
         console.error('Erro ao excluir conta:', error);
-        alert('Erro ao excluir conta. Tente novamente.');
         return false;
     }
 }
 
 // Funções de transação
 async function createTransaction(accountId, type, amount, category, date, description = '', tags = '') {
-    return await api('transactions', 'POST', {
-        account_id: accountId,
-        type,
-        amount,
-        category,
-        date,
-        description,
-        tags
-    });
+    try {
+        if (!currentUser) return false;
+        
+        // Verifica se a conta pertence ao usuário
+        const stmt = db.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?');
+        const account = stmt.getAsObject([accountId, currentUser.id]);
+        stmt.free();
+        
+        if (!account.id) return false;
+        
+        db.run(`
+            INSERT INTO transactions (account_id, type, amount, category, date, description, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [accountId, type, amount, category, date, description, tags]);
+        
+        // Atualiza o saldo da conta
+        const balanceChange = type === 'expense' ? -amount : amount;
+        db.run(`
+            UPDATE accounts 
+            SET balance = balance + ? 
+            WHERE id = ?
+        `, [balanceChange, accountId]);
+        
+        saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao criar transação:', error);
+        return false;
+    }
 }
 
 async function getTransactions(filters = {}) {
-    const queryParams = new URLSearchParams(filters).toString();
-    const response = await api(`transactions?${queryParams}`);
-    return response.success ? response.data : [];
+    try {
+        if (!currentUser) return [];
+        
+        let query = `
+            SELECT t.*, a.name as account_name 
+            FROM transactions t
+            JOIN accounts a ON t.account_id = a.id
+            WHERE a.user_id = ?
+        `;
+        
+        const params = [currentUser.id];
+        
+        if (filters.startDate) {
+            query += ' AND t.date >= ?';
+            params.push(filters.startDate);
+        }
+        
+        if (filters.endDate) {
+            query += ' AND t.date <= ?';
+            params.push(filters.endDate);
+        }
+        
+        if (filters.type) {
+            query += ' AND t.type = ?';
+            params.push(filters.type);
+        }
+        
+        if (filters.category) {
+            query += ' AND t.category = ?';
+            params.push(filters.category);
+        }
+        
+        query += ' ORDER BY t.date DESC';
+        
+        const stmt = db.prepare(query);
+        const transactions = [];
+        
+        while (stmt.step()) {
+            const row = stmt.getAsObject();
+            transactions.push(row);
+        }
+        stmt.free();
+        
+        return transactions;
+    } catch (error) {
+        console.error('Erro ao buscar transações:', error);
+        return [];
+    }
 }
 
 // Funções de orçamento
