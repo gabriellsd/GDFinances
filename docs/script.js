@@ -9,6 +9,7 @@ document.body.classList.toggle('light', !prefersDark);
 let db;
 let token = localStorage.getItem('token');
 let currentUser = null;
+let SQL;
 
 // Definição dos ícones
 const icons = {
@@ -48,33 +49,116 @@ if (savedTheme) {
     document.body.classList.add(savedTheme);
 }
 
+// Inicialização do SQLite
+async function initSQLite() {
+    // Carrega o SQL.js WebAssembly
+    const sqlPromise = await initSqlJs({
+        locateFile: file => `lib/${file}`
+    });
+    SQL = sqlPromise;
+    
+    // Cria ou carrega o banco de dados
+    const dbData = localStorage.getItem('database');
+    if (dbData) {
+        const uint8Array = new Uint8Array(dbData.split(',').map(Number));
+        db = new SQL.Database(uint8Array);
+    } else {
+        db = new SQL.Database();
+        // Cria as tabelas necessárias
+        db.run(`
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            );
+            
+            CREATE TABLE IF NOT EXISTS accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                balance REAL NOT NULL,
+                color TEXT,
+                icon TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                category TEXT,
+                date TEXT NOT NULL,
+                description TEXT,
+                tags TEXT,
+                FOREIGN KEY (account_id) REFERENCES accounts(id)
+            );
+        `);
+        saveDatabase();
+    }
+}
+
+// Salva o banco de dados no localStorage
+function saveDatabase() {
+    const data = db.export();
+    const array = Array.from(data);
+    localStorage.setItem('database', array.toString());
+}
+
 // Funções de API
 async function api(endpoint, method = 'GET', body = null) {
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-    
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+    // Simula uma API usando SQLite local
+    try {
+        let result;
+        
+        switch (endpoint) {
+            case 'login':
+                if (method === 'POST') {
+                    const { email, password } = body;
+                    const stmt = db.prepare('SELECT id FROM users WHERE email = ? AND password = ?');
+                    const row = stmt.getAsObject([email, password]);
+                    stmt.free();
+                    
+                    if (row.id) {
+                        token = btoa(email); // Token simples baseado no email
+                        localStorage.setItem('token', token);
+                        currentUser = { id: row.id, email };
+                        result = { success: true, token };
+                    } else {
+                        result = { success: false, message: 'Credenciais inválidas' };
+                    }
+                }
+                break;
+                
+            case 'register':
+                if (method === 'POST') {
+                    const { email, password } = body;
+                    try {
+                        db.run('INSERT INTO users (email, password) VALUES (?, ?)', [email, password]);
+                        saveDatabase();
+                        token = btoa(email);
+                        localStorage.setItem('token', token);
+                        const stmt = db.prepare('SELECT id FROM users WHERE email = ?');
+                        const row = stmt.getAsObject([email]);
+                        stmt.free();
+                        currentUser = { id: row.id, email };
+                        result = { success: true, token };
+                    } catch (err) {
+                        result = { success: false, message: 'Email já cadastrado' };
+                    }
+                }
+                break;
+                
+            default:
+                result = { success: false, message: 'Endpoint não encontrado' };
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Erro na API:', error);
+        return { success: false, message: 'Erro interno' };
     }
-    
-    const options = {
-        method,
-        headers
-    };
-    
-    if (body) {
-        options.body = JSON.stringify(body);
-    }
-    
-    const response = await fetch(`/api/${endpoint}`, options);
-    const data = await response.json();
-    
-    if (!data.success && data.message === 'Token inválido') {
-        logout();
-    }
-    
-    return data;
 }
 
 // Funções de autenticação
@@ -994,33 +1078,23 @@ function setupNewButton() {
 
 // Inicialização
 async function init() {
+    await initSQLite();
     setupTheme();
     setupLogin();
     setupRegisterModal();
     setupDashboardNavigation();
+    setupNewButton();
     setupAccountModal();
     setupTransactionModal();
     setupBudgetModal();
     setupGoalModal();
-    setupNewButton();
     
-    // Verificar se já está logado
+    // Verifica se há um token salvo
     if (token) {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'flex';
         updateDashboardOverview();
     }
-    
-    // Configurar logout
-    document.getElementById('logout').addEventListener('click', logout);
-    
-    // Fechar menus de contexto ao clicar fora
-    document.addEventListener('click', (e) => {
-        const contextMenu = document.querySelector('.context-menu');
-        if (contextMenu && !contextMenu.contains(e.target)) {
-            contextMenu.remove();
-        }
-    });
 }
 
 // Iniciar aplicação
