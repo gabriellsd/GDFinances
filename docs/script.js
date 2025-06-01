@@ -189,6 +189,16 @@ async function initSQLite() {
                         tags TEXT,
                         FOREIGN KEY (account_id) REFERENCES accounts(id)
                     );
+
+                    CREATE TABLE IF NOT EXISTS credit_cards (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        account_id INTEGER NOT NULL,
+                        brand TEXT,
+                        closing_day INTEGER,
+                        due_day INTEGER,
+                        credit_limit REAL,
+                        FOREIGN KEY (account_id) REFERENCES accounts(id)
+                    );
                 `);
                 await saveDatabase();
             }
