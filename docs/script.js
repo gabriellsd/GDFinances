@@ -1205,6 +1205,9 @@ async function init() {
     setupBudgetModal();
     setupGoalModal();
     
+    // Configurar botão de logout
+    document.getElementById('logout').addEventListener('click', logout);
+    
     // Verifica se há um token salvo
     if (token) {
         document.getElementById('login-screen').style.display = 'none';
