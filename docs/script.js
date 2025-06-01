@@ -52,18 +52,22 @@ if (savedTheme) {
 // Inicialização do SQLite
 async function initSQLite() {
     try {
+        console.log('Iniciando SQLite...');
         // Carrega o SQL.js WebAssembly
         const sqlPromise = await initSqlJs({
             locateFile: file => `lib/${file}`
         });
         SQL = sqlPromise;
+        console.log('SQL.js carregado com sucesso!');
         
         // Cria ou carrega o banco de dados
         const dbData = localStorage.getItem('database');
         if (dbData) {
+            console.log('Carregando banco de dados existente...');
             const uint8Array = new Uint8Array(dbData.split(',').map(Number));
             db = new SQL.Database(uint8Array);
         } else {
+            console.log('Criando novo banco de dados...');
             db = new SQL.Database();
             // Cria as tabelas necessárias
             db.run(`
@@ -116,18 +120,32 @@ function saveDatabase() {
 // Funções de autenticação
 async function login(email, password) {
     try {
+        console.log('Tentando fazer login...', { email });
+        
         if (!db) {
+            console.log('Banco de dados não inicializado, tentando inicializar...');
             const initialized = await initSQLite();
             if (!initialized) {
+                console.error('Falha ao inicializar banco de dados');
                 return false;
             }
         }
 
-        const stmt = db.prepare('SELECT id FROM users WHERE email = ? AND password = ?');
+        // Primeiro, vamos verificar se o usuário existe
+        let stmt = db.prepare('SELECT COUNT(*) as count FROM users');
+        let result = stmt.getAsObject();
+        stmt.free();
+        console.log('Total de usuários:', result.count);
+
+        // Agora vamos buscar o usuário
+        stmt = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?');
         const row = stmt.getAsObject([email, password]);
         stmt.free();
         
+        console.log('Resultado da busca:', row);
+        
         if (row.id) {
+            console.log('Login bem-sucedido!');
             token = btoa(email);
             localStorage.setItem('token', token);
             currentUser = { id: row.id, email };
@@ -137,6 +155,7 @@ async function login(email, password) {
             return true;
         }
         
+        console.log('Credenciais inválidas');
         return false;
     } catch (error) {
         console.error('Erro no login:', error);
@@ -146,21 +165,41 @@ async function login(email, password) {
 
 async function register(email, password) {
     try {
+        console.log('Tentando registrar...', { email });
+        
         if (!db) {
+            console.log('Banco de dados não inicializado, tentando inicializar...');
             const initialized = await initSQLite();
             if (!initialized) {
+                console.error('Falha ao inicializar banco de dados');
                 return false;
             }
         }
 
         try {
+            // Primeiro, vamos verificar se o usuário já existe
+            let stmt = db.prepare('SELECT COUNT(*) as count FROM users WHERE email = ?');
+            let result = stmt.getAsObject([email]);
+            stmt.free();
+            
+            if (result.count > 0) {
+                console.log('Email já cadastrado');
+                return false;
+            }
+
+            console.log('Inserindo novo usuário...');
             db.run('INSERT INTO users (email, password) VALUES (?, ?)', [email, password]);
             saveDatabase();
-            token = btoa(email);
-            localStorage.setItem('token', token);
-            const stmt = db.prepare('SELECT id FROM users WHERE email = ?');
+            
+            // Busca o ID do usuário recém-criado
+            stmt = db.prepare('SELECT id FROM users WHERE email = ?');
             const row = stmt.getAsObject([email]);
             stmt.free();
+            
+            console.log('Usuário criado com sucesso:', row);
+            
+            token = btoa(email);
+            localStorage.setItem('token', token);
             currentUser = { id: row.id, email };
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('dashboard').style.display = 'flex';
