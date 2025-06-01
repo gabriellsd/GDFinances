@@ -1199,6 +1199,7 @@ function setupRegisterModal() {
     
     registerBtn.addEventListener('click', (e) => {
         e.preventDefault();
+        console.log('Botão de registro clicado');
         modal.style.display = 'flex';
         modal.classList.add('active');
     });
@@ -1221,25 +1222,39 @@ function setupRegisterModal() {
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log('Formulário de registro submetido');
         
         const email = document.getElementById('register-email').value;
         const password = document.getElementById('register-password').value;
         const confirmPassword = document.getElementById('register-password-confirm').value;
         
+        console.log('Dados do formulário:', { email, passwordLength: password.length });
+        
+        errorMessage.style.display = 'none';
+        
         if (password !== confirmPassword) {
+            console.log('Senhas não coincidem');
             errorMessage.textContent = 'As senhas não coincidem';
             errorMessage.style.display = 'block';
             return;
         }
         
-        const success = await register(email, password);
+        if (password.length < 6) {
+            console.log('Senha muito curta');
+            errorMessage.textContent = 'A senha deve ter pelo menos 6 caracteres';
+            errorMessage.style.display = 'block';
+            return;
+        }
         
-        if (success) {
-            closeModal();
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            updateDashboardOverview();
-        } else {
+        try {
+            const success = await register(email, password);
+            console.log('Resultado do registro:', { success });
+            
+            if (success) {
+                closeModal();
+            }
+        } catch (error) {
+            console.error('Erro ao tentar registrar:', error);
             errorMessage.textContent = 'Erro ao criar conta. Tente novamente.';
             errorMessage.style.display = 'block';
         }
