@@ -108,6 +108,10 @@ function saveDatabase() {
 
 // Funções de API
 async function api(endpoint, method = 'GET', body = null) {
+    if (!db) {
+        await initSQLite();
+    }
+
     // Simula uma API usando SQLite local
     try {
         let result;
@@ -124,9 +128,9 @@ async function api(endpoint, method = 'GET', body = null) {
                         token = btoa(email); // Token simples baseado no email
                         localStorage.setItem('token', token);
                         currentUser = { id: row.id, email };
-                        result = { success: true, token };
+                        return { success: true, token };
                     } else {
-                        result = { success: false, message: 'Credenciais inválidas' };
+                        return { success: false, message: 'Credenciais inválidas' };
                     }
                 }
                 break;
@@ -143,15 +147,15 @@ async function api(endpoint, method = 'GET', body = null) {
                         const row = stmt.getAsObject([email]);
                         stmt.free();
                         currentUser = { id: row.id, email };
-                        result = { success: true, token };
+                        return { success: true, token };
                     } catch (err) {
-                        result = { success: false, message: 'Email já cadastrado' };
+                        return { success: false, message: 'Email já cadastrado' };
                     }
                 }
                 break;
                 
             default:
-                result = { success: false, message: 'Endpoint não encontrado' };
+                return { success: false, message: 'Endpoint não encontrado' };
         }
         
         return result;
@@ -163,11 +167,18 @@ async function api(endpoint, method = 'GET', body = null) {
 
 // Funções de autenticação
 async function login(email, password) {
+    if (!db) {
+        await initSQLite();
+    }
+
     const data = await api('login', 'POST', { email, password });
     
     if (data.success) {
         token = data.token;
         localStorage.setItem('token', token);
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        updateDashboardOverview();
         return true;
     }
     
