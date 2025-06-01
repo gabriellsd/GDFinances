@@ -64,9 +64,9 @@ async function openIndexedDB() {
         };
         
         request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains('database')) {
-                db.createObjectStore('database');
+            const idb = event.target.result;
+            if (!idb.objectStoreNames.contains('database')) {
+                idb.createObjectStore('database');
             }
         };
     });
@@ -206,6 +206,16 @@ async function login(email, password) {
     try {
         console.log('Iniciando processo de login...', { email });
         
+        if (!sqliteDB) {
+            console.log('Banco de dados não inicializado, tentando inicializar...');
+            const initialized = await initSQLite();
+            if (!initialized) {
+                console.error('Falha ao inicializar banco de dados');
+                return false;
+            }
+            console.log('Banco de dados inicializado com sucesso');
+        }
+
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
         
@@ -262,7 +272,7 @@ async function register(email, password) {
         console.log('Registro bem-sucedido!', { userId: user.uid });
         
         // Criar documento do usuário no Firestore
-        await db.collection('users').doc(user.uid).set({
+        await firestoreDB.collection('users').doc(user.uid).set({
             email: user.email,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
