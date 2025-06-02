@@ -200,6 +200,7 @@ async function initSQLite() {
                         FOREIGN KEY (account_id) REFERENCES accounts(id)
                     );
                 `);
+                
                 await saveDatabase();
             }
         }
@@ -365,27 +366,33 @@ async function createAccount(name, type, balance, color = '#10B981', icon = 'ban
             return false;
         }
         
-        console.log('Inserindo conta no banco de dados...');
-        sqliteDB.run(`
-            INSERT INTO accounts (user_id, name, type, balance, color, icon)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `, [currentUser.id, name, type, balance, color, icon]);
+        const data = await loadData();
         
+        // Criar nova conta
+        const newAccount = {
+            id: Date.now(), // Usar timestamp como ID
+            user_id: currentUser.id,
+            name,
+            type,
+            balance,
+            color,
+            icon
+        };
+        
+        data.accounts.push(newAccount);
+        
+        // Se for cartão de crédito, adicionar informações
         if (type === 'credit_card' && creditCardInfo) {
-            console.log('Conta é cartão de crédito, obtendo ID da conta criada...');
-            const stmt = sqliteDB.prepare('SELECT last_insert_rowid() as id');
-            const { id } = stmt.getAsObject();
-            stmt.free();
-            
-            console.log('Inserindo informações do cartão de crédito...', { id, creditCardInfo });
-            sqliteDB.run(`
-                INSERT INTO credit_cards (account_id, brand, closing_day, due_day, credit_limit)
-                VALUES (?, ?, ?, ?, ?)
-            `, [id, creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit]);
+            const newCreditCard = {
+                id: Date.now(),
+                account_id: newAccount.id,
+                ...creditCardInfo
+            };
+            data.credit_cards.push(newCreditCard);
         }
         
-        console.log('Salvando banco de dados...');
-        saveDatabase();
+        // Salvar dados atualizados
+        await saveData(data);
         console.log('Conta criada com sucesso!');
         return true;
     } catch (error) {
@@ -396,22 +403,16 @@ async function createAccount(name, type, balance, color = '#10B981', icon = 'ban
 
 async function getAccounts() {
     try {
-        if (!currentUser) return [];
-        
-        const stmt = sqliteDB.prepare(`
-            SELECT * FROM accounts 
-            WHERE user_id = ?
-            ORDER BY name
-        `);
-        
-        const accounts = [];
-        while (stmt.step()) {
-            const row = stmt.getAsObject();
-            accounts.push(row);
+        if (!currentUser) {
+            console.log('getAccounts: Usuário não autenticado');
+            return [];
         }
-        stmt.free();
         
-        return accounts;
+        const data = await loadData();
+        const userAccounts = data.accounts.filter(account => account.user_id === currentUser.id);
+        
+        console.log('getAccounts: Contas encontradas:', userAccounts);
+        return userAccounts;
     } catch (error) {
         console.error('Erro ao buscar contas:', error);
         return [];
@@ -422,21 +423,23 @@ async function updateAccount(id, name, type, balance, color, icon, creditCardInf
     try {
         if (!currentUser) return false;
         
-        sqliteDB.run(`
-            UPDATE accounts 
-            SET name = ?, type = ?, balance = ?, color = ?, icon = ?
-            WHERE id = ? AND user_id = ?
-        `, [name, type, balance, color, icon, id, currentUser.id]);
+        const data = await loadData();
         
+        // Atualizar dados no array
+        const updatedAccounts = data.accounts.map(account =>
+            account.id === id ? { ...account, name, type, balance, color, icon } : account
+        );
+        
+        // Se for cartão de crédito, atualizar informações
         if (type === 'credit_card' && creditCardInfo) {
-            sqliteDB.run(`
-                UPDATE credit_cards 
-                SET brand = ?, closing_day = ?, due_day = ?, credit_limit = ?
-                WHERE account_id = ?
-            `, [creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit, id]);
+            const updatedCreditCards = data.credit_cards.map(card =>
+                card.id === id ? { ...card, ...creditCardInfo } : card
+            );
+            data.credit_cards = updatedCreditCards;
         }
         
-        saveDatabase();
+        // Salvar dados atualizados
+        await saveData(data);
         return true;
     } catch (error) {
         console.error('Erro ao atualizar conta:', error);
@@ -448,8 +451,18 @@ async function deleteAccount(id) {
     try {
         if (!currentUser) return false;
         
-        sqliteDB.run('DELETE FROM accounts WHERE id = ? AND user_id = ?', [id, currentUser.id]);
-        saveDatabase();
+        const data = await loadData();
+        
+        // Filtrar contas e cartões de crédito
+        const updatedAccounts = data.accounts.filter(account => account.id !== id);
+        const updatedCreditCards = data.credit_cards.filter(card => card.id !== id);
+        
+        // Atualizar dados no array
+        data.accounts = updatedAccounts;
+        data.credit_cards = updatedCreditCards;
+        
+        // Salvar dados atualizados
+        await saveData(data);
         
         await renderAccounts();
         await updateDashboardCards();
@@ -467,27 +480,36 @@ async function createTransaction(accountId, type, amount, category, date, descri
     try {
         if (!currentUser) return false;
         
+        const data = await loadData();
+        
         // Verifica se a conta pertence ao usuário
-        const stmt = sqliteDB.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?');
-        const account = stmt.getAsObject([accountId, currentUser.id]);
-        stmt.free();
+        const account = data.accounts.find(a => a.id === accountId && a.user_id === currentUser.id);
+        if (!account) return false;
         
-        if (!account.id) return false;
+        // Criar nova transação
+        const newTransaction = {
+            id: Date.now(),
+            account_id: accountId,
+            type,
+            amount,
+            category,
+            date,
+            description,
+            tags
+        };
         
-        sqliteDB.run(`
-            INSERT INTO transactions (account_id, type, amount, category, date, description, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [accountId, type, amount, category, date, description, tags]);
-        
-        // Atualiza o saldo da conta
+        // Atualizar saldo da conta
         const balanceChange = type === 'expense' ? -amount : amount;
-        sqliteDB.run(`
-            UPDATE accounts 
-            SET balance = balance + ? 
-            WHERE id = ?
-        `, [balanceChange, accountId]);
+        const updatedAccounts = data.accounts.map(a =>
+            a.id === accountId ? { ...a, balance: a.balance + balanceChange } : a
+        );
         
-        saveDatabase();
+        // Atualizar dados no array
+        data.accounts = updatedAccounts;
+        data.transactions.push(newTransaction);
+        
+        // Salvar dados atualizados
+        await saveData(data);
         return true;
     } catch (error) {
         console.error('Erro ao criar transação:', error);
@@ -499,45 +521,26 @@ async function getTransactions(filters = {}) {
     try {
         if (!currentUser) return [];
         
-        let query = `
-            SELECT t.*, a.name as account_name 
-            FROM transactions t
-            JOIN accounts a ON t.account_id = a.id
-            WHERE a.user_id = ?
-        `;
-        
-        const params = [currentUser.id];
+        const data = await loadData();
+        let transactions = data.transactions.filter(t => t.account_id === currentUser.id);
         
         if (filters.startDate) {
-            query += ' AND t.date >= ?';
-            params.push(filters.startDate);
+            transactions = transactions.filter(t => new Date(t.date) >= new Date(filters.startDate));
         }
         
         if (filters.endDate) {
-            query += ' AND t.date <= ?';
-            params.push(filters.endDate);
+            transactions = transactions.filter(t => new Date(t.date) <= new Date(filters.endDate));
         }
         
         if (filters.type) {
-            query += ' AND t.type = ?';
-            params.push(filters.type);
+            transactions = transactions.filter(t => t.type === filters.type);
         }
         
         if (filters.category) {
-            query += ' AND t.category = ?';
-            params.push(filters.category);
+            transactions = transactions.filter(t => t.category === filters.category);
         }
         
-        query += ' ORDER BY t.date DESC';
-        
-        const stmt = sqliteDB.prepare(query);
-        const transactions = [];
-        
-        while (stmt.step()) {
-            const row = stmt.getAsObject();
-            transactions.push(row);
-        }
-        stmt.free();
+        transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
         
         return transactions;
     } catch (error) {
@@ -1399,7 +1402,7 @@ function setupNewButton() {
 
 // Inicialização
 async function init() {
-    await initSQLite();
+    await initDatabase();
     setupTheme();
     setupLogin();
     setupRegisterModal();
