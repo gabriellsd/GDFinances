@@ -81,20 +81,24 @@ async function api(endpoint, method = 'GET', body = null) {
 async function login(email, password) {
     try {
         console.log('Iniciando processo de login...', { email });
-        
-        if (!sqliteDB) {
-            console.log('Banco de dados não inicializado, tentando inicializar...');
-            const initialized = await initSQLite();
-            if (!initialized) {
-                console.error('Falha ao inicializar banco de dados');
-                throw new Error('database_init_failed');
+
+        // Se Firebase Auth estiver definido, utilize-o; caso contrário, faça requisição à API
+        let user = null;
+        if (typeof auth !== 'undefined' && auth.signInWithEmailAndPassword) {
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            user = userCredential.user;
+        } else {
+            // Fallback: utilizar endpoint de login da API
+            const data = await api('login', 'POST', { email, password });
+            if (!data.success) {
+                throw { code: 'api/login-failed', message: data.message || 'Falha na API' };
             }
-            console.log('Banco de dados inicializado com sucesso');
+            token = data.token;
+            localStorage.setItem('token', token);
+            currentUser = data.user || { email };
+            return true;
         }
 
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        
         console.log('Login bem-sucedido!', { userId: user.uid });
         
         // Salvar token e dados do usuário
