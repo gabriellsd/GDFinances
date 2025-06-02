@@ -5,10 +5,30 @@ const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 document.body.classList.toggle('dark', prefersDark);
 document.body.classList.toggle('light', !prefersDark);
 
-// Variáveis globais
-let db;
+// Configuração inicial e variáveis globais
 let token = localStorage.getItem('token');
 let currentUser = null;
+
+// Verificar e limpar qualquer referência anterior que possa causar conflito
+if (typeof window.sqliteDB !== 'undefined') {
+    console.warn('Limpando referência anterior ao sqliteDB');
+    delete window.sqliteDB;
+}
+
+// Verificar se Firebase está carregado corretamente
+function checkFirebaseLoaded() {
+    if (typeof firebase === 'undefined') {
+        console.error('Firebase não foi carregado. Verifique se os scripts estão incluídos.');
+        return false;
+    }
+    
+    if (typeof auth === 'undefined') {
+        console.error('Firebase Auth não foi inicializado. Verifique firebase-config.js');
+        return false;
+    }
+    
+    return true;
+}
 
 // Definição dos ícones
 const icons = {
@@ -81,23 +101,18 @@ async function api(endpoint, method = 'GET', body = null) {
 async function login(email, password) {
     try {
         console.log('Iniciando processo de login...', { email });
-
-        // Se Firebase Auth estiver definido, utilize-o; caso contrário, faça requisição à API
-        let user = null;
-        if (typeof auth !== 'undefined' && auth.signInWithEmailAndPassword) {
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            user = userCredential.user;
-        } else {
-            // Fallback: utilizar endpoint de login da API
-            const data = await api('login', 'POST', { email, password });
-            if (!data.success) {
-                throw { code: 'api/login-failed', message: data.message || 'Falha na API' };
-            }
-            token = data.token;
-            localStorage.setItem('token', token);
-            currentUser = data.user || { email };
-            return true;
+        
+        // Verificar se Firebase está carregado
+        if (!checkFirebaseLoaded()) {
+            throw { 
+                code: 'firebase/not-loaded', 
+                message: 'Firebase não foi carregado corretamente' 
+            };
         }
+
+        // Usar Firebase Auth para login
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
 
         console.log('Login bem-sucedido!', { userId: user.uid });
         
@@ -128,8 +143,8 @@ async function login(email, password) {
             case 'auth/too-many-requests':
                 errorMessage = 'Muitas tentativas. Tente novamente mais tarde';
                 break;
-            case 'database_init_failed':
-                errorMessage = 'Erro ao inicializar o banco de dados. Tente recarregar a página.';
+            case 'firebase/not-loaded':
+                errorMessage = 'Erro ao carregar sistema. Recarregue a página.';
                 break;
             case 'auth/network-request-failed':
                 errorMessage = 'Erro de conexão. Verifique sua internet.';
