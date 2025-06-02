@@ -9,7 +9,7 @@
     --text-secondary: rgba(248, 250, 252, 0.7);
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
-    --bg-card: #1e293b;
+    --bg-card: rgba(30, 41, 59, 0.5);
     --border-color: rgba(248, 250, 252, 0.1);
     --gradient-start: #4F46E5;
     --gradient-end: #6366F1;
@@ -38,7 +38,7 @@ body {
 body.light {
     --bg-primary: #f8fafc;
     --bg-secondary: #f1f5f9;
-    --bg-card: #ffffff;
+    --bg-card: rgba(255, 255, 255, 0.9);
     --text-primary: #0f172a;
     --text-secondary: rgba(15, 23, 42, 0.7);
     --border-color: rgba(15, 23, 42, 0.1);
@@ -313,14 +313,19 @@ body.light .input-icon input::placeholder {
 @media (max-width: 768px) {
     .login-container {
         flex-direction: column;
+        max-width: 100%;
+        margin: 10px;
+        height: auto;
+        padding: 20px;
     }
 
     .login-illustration {
-        padding: 40px 20px;
+        display: none;
     }
 
     .login-content {
-        padding: 30px 20px;
+        padding: 20px;
+        width: 100%;
     }
 
     .illustration-icon {
@@ -395,7 +400,7 @@ body.light .input-icon input::placeholder {
     top: calc(100% + 8px);
     left: 8px;
     right: 8px;
-    background: var(--bg-card);
+    background: #1e293b;
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 8px;
@@ -403,7 +408,12 @@ body.light .input-icon input::placeholder {
     flex-direction: column;
     gap: 4px;
     z-index: 1000;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(0);
+}
+
+body.light .dropdown-menu {
+    background: #f8fafc;
 }
 
 .dropdown-menu.active {
@@ -650,7 +660,6 @@ body.light .input-icon input::placeholder {
     border: 1px solid var(--border-color);
     transition: all 0.2s ease;
     position: relative;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .account-card::before {
@@ -668,7 +677,6 @@ body.light .input-icon input::placeholder {
 .account-card:hover {
     transform: translateY(-2px);
     border-color: var(--border-hover);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .account-card:hover::before {
@@ -764,7 +772,6 @@ body.light .input-icon input::placeholder {
     justify-content: center;
     gap: 12px;
     min-height: 160px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .new-account-card:hover {
@@ -1384,4 +1391,279 @@ body.dark .moon-icon { display: block; }
 #accountType[value="credit_card"] ~ #creditCardFields input:required,
 #accountType[value="credit_card"] ~ #creditCardFields select:required {
     border-left: 3px solid var(--primary-color);
+}
+
+/* Responsividade Mobile */
+@media (max-width: 768px) {
+    /* Login */
+    .login-container {
+        flex-direction: column;
+        max-width: 100%;
+        margin: 10px;
+        height: auto;
+        padding: 20px;
+    }
+
+    .login-illustration {
+        display: none;
+    }
+
+    .login-content {
+        padding: 20px;
+        width: 100%;
+    }
+
+    /* Dashboard */
+    #dashboard {
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        width: 100%;
+        height: 60px;
+        padding: 0;
+        z-index: 1000;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        backdrop-filter: blur(10px);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .sidebar-header, 
+    .sidebar-footer,
+    .new-button {
+        display: none;
+    }
+
+    .sidebar-nav {
+        width: 100%;
+        margin: 0;
+    }
+
+    .sidebar-nav ul {
+        display: flex;
+        justify-content: space-around;
+        padding: 0;
+        margin: 0;
+        width: 100%;
+    }
+
+    .sidebar-nav li {
+        flex: 1;
+    }
+
+    .sidebar-nav a {
+        padding: 8px 4px;
+        margin: 0;
+        flex-direction: column;
+        font-size: 12px;
+        text-align: center;
+        gap: 4px;
+        border-radius: 0;
+    }
+
+    .nav-icon {
+        margin: 0;
+        width: 24px;
+        height: 24px;
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 16px;
+        padding-bottom: 80px;
+        height: calc(100vh - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Cards */
+    .dashboard-cards {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 0;
+    }
+
+    .card {
+        padding: 16px;
+        margin: 0;
+    }
+
+    /* Gráficos */
+    .charts-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 0;
+    }
+
+    .chart-container {
+        padding: 16px;
+        min-height: 300px;
+    }
+
+    /* Contas */
+    .accounts-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 0;
+    }
+
+    .account-card {
+        padding: 16px;
+    }
+
+    /* Modal */
+    .modal-content {
+        width: 95%;
+        margin: 10px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    /* Botão Nova Transação */
+    .new-transaction-button {
+        position: fixed;
+        bottom: 76px;
+        right: 16px;
+        z-index: 1001;
+        width: 56px;
+        height: 56px;
+        border-radius: 28px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .new-transaction-button span {
+        display: none;
+    }
+
+    .new-transaction-button .nav-icon {
+        margin: 0;
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Menu Dropdown */
+    .dropdown-menu {
+        bottom: 76px;
+        right: 16px;
+        top: auto;
+        left: auto;
+        transform-origin: bottom right;
+        width: auto;
+        min-width: 200px;
+    }
+
+    /* Header Controls */
+    .header-controls {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        z-index: 999;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* Ajuste para o conteúdo principal considerando o header fixo */
+    .main-content {
+        margin-top: 60px;
+    }
+}
+
+/* Ajustes para telas muito pequenas */
+@media (max-width: 360px) {
+    .sidebar-nav a {
+        padding: 6px 2px;
+        font-size: 10px;
+    }
+
+    .nav-icon {
+        width: 20px;
+        height: 20px;
+    }
+
+    .modal-content {
+        width: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+
+    .header-controls {
+        padding: 8px 12px;
+    }
+}
+
+/* Melhorias de usabilidade para touch */
+@media (hover: none) {
+    /* Remover hover states em dispositivos touch */
+    .sidebar-nav a:hover,
+    .btn-primary:hover,
+    .account-card:hover,
+    .budget-card:hover,
+    .goal-card:hover {
+        transform: none;
+    }
+
+    /* Aumentar área de toque */
+    .sidebar-nav a,
+    .btn-primary,
+    .form-group input,
+    .modal-close,
+    .dropdown-item {
+        min-height: 44px;
+    }
+
+    /* Melhorar feedback de toque */
+    .sidebar-nav a:active,
+    .btn-primary:active,
+    .account-card:active {
+        opacity: 0.7;
+        transition: opacity 0.1s;
+    }
+}
+
+/* Safe areas para dispositivos modernos */
+@supports (padding: max(0px)) {
+    .sidebar {
+        padding-bottom: max(0px, env(safe-area-inset-bottom));
+        height: calc(60px + env(safe-area-inset-bottom));
+    }
+
+    .main-content {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    }
+
+    .new-transaction-button {
+        bottom: calc(76px + env(safe-area-inset-bottom));
+    }
+
+    .header-controls {
+        padding-top: max(12px, env(safe-area-inset-top));
+    }
+}
+
+/* Dark mode adaptativo */
+@media (prefers-color-scheme: dark) {
+    body:not(.light) {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --text-primary: #f8fafc;
+        --text-secondary: rgba(248, 250, 252, 0.7);
+    }
 }
