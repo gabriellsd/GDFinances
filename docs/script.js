@@ -358,25 +358,35 @@ auth.onAuthStateChanged((user) => {
 // Funções de conta
 async function createAccount(name, type, balance, color = '#10B981', icon = 'bank', creditCardInfo = {}) {
     try {
-        if (!currentUser) return false;
+        console.log('Tentando criar conta:', { name, type, balance, color, icon, currentUser });
         
+        if (!currentUser) {
+            console.log('Erro: Usuário não autenticado');
+            return false;
+        }
+        
+        console.log('Inserindo conta no banco de dados...');
         sqliteDB.run(`
             INSERT INTO accounts (user_id, name, type, balance, color, icon)
             VALUES (?, ?, ?, ?, ?, ?)
         `, [currentUser.id, name, type, balance, color, icon]);
         
         if (type === 'credit_card' && creditCardInfo) {
+            console.log('Conta é cartão de crédito, obtendo ID da conta criada...');
             const stmt = sqliteDB.prepare('SELECT last_insert_rowid() as id');
             const { id } = stmt.getAsObject();
             stmt.free();
             
+            console.log('Inserindo informações do cartão de crédito...', { id, creditCardInfo });
             sqliteDB.run(`
                 INSERT INTO credit_cards (account_id, brand, closing_day, due_day, credit_limit)
                 VALUES (?, ?, ?, ?, ?)
             `, [id, creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit]);
         }
         
+        console.log('Salvando banco de dados...');
         saveDatabase();
+        console.log('Conta criada com sucesso!');
         return true;
     } catch (error) {
         console.error('Erro ao criar conta:', error);
@@ -979,11 +989,15 @@ function setupAccountModal() {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        console.log('Formulário submetido');
+        
         const name = document.getElementById('accountName').value;
         const type = document.getElementById('accountType').value;
         const balance = parseFloat(document.getElementById('accountBalance').value);
         const color = document.querySelector('.color-option.selected').dataset.color;
         const icon = document.querySelector('.icon-option.selected').dataset.icon;
+        
+        console.log('Dados do formulário:', { name, type, balance, color, icon });
         
         // Adicionar informações do cartão de crédito se for o tipo selecionado
         let creditCardInfo = {};
@@ -994,18 +1008,23 @@ function setupAccountModal() {
                 due_day: parseInt(document.getElementById('dueDay').value),
                 credit_limit: parseFloat(document.getElementById('creditLimit').value)
             };
+            console.log('Informações do cartão de crédito:', creditCardInfo);
         }
         
         const editId = form.getAttribute('data-edit-id');
         let result;
         
         try {
+            console.log('Tentando salvar conta...');
             if (editId) {
+                console.log('Atualizando conta existente:', editId);
                 result = await updateAccount(parseInt(editId), name, type, balance, color, icon, creditCardInfo);
             } else {
+                console.log('Criando nova conta');
                 result = await createAccount(name, type, balance, color, icon, creditCardInfo);
             }
             
+            console.log('Resultado da operação:', result);
             if (result) {
                 closeModal();
                 await renderAccounts();
