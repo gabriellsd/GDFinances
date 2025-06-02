@@ -11,7 +11,9 @@ GDFinances é um sistema de gerenciamento de finanças pessoais moderno e intuit
 - 📈 Gráficos de fluxo de caixa
 - 🎯 Sistema de metas financeiras
 - 📱 Interface responsiva
-- 🌓 Tema claro/escuro
+- �� Tema claro/escuro
+- 📱 Versão mobile como PWA
+- 🔄 Sincronização offline
 
 ## 🚀 Tecnologias
 
@@ -21,6 +23,8 @@ GDFinances é um sistema de gerenciamento de finanças pessoais moderno e intuit
 - Firebase (Autenticação e Banco de Dados)
 - Chart.js para gráficos
 - GitHub Pages para hospedagem
+- Service Workers para PWA
+- IndexedDB para armazenamento offline
 
 ## 🔧 Configuração Local
 
@@ -34,19 +38,29 @@ git clone https://github.com/gabriellsd/GDFinances.git
 cd GDFinances
 ```
 
-3. Abra o arquivo `docs/index.html` em seu navegador ou use um servidor local.
+3. Para versão web:
+- Abra o arquivo `docs/index.html` em seu navegador ou use um servidor local
+
+4. Para versão mobile:
+- Acesse via smartphone em [https://gabriellsd.github.io/GDFinances/mobile](https://gabriellsd.github.io/GDFinances/mobile)
+- Ou adicione à tela inicial para usar como aplicativo
 
 ## 📦 Estrutura do Projeto
 
 ```
-docs/
-├── index.html          # Página principal
-├── styles.css          # Estilos
-├── script.js           # Lógica principal
-├── firebase-config.js  # Configuração do Firebase
-└── lib/               # Bibliotecas externas
-    ├── chart.min.js
-    └── papaparse.min.js
+docs/               # Versão web
+├── index.html     # Página principal web
+├── styles.css     # Estilos web
+├── script.js      # Lógica principal web
+└── lib/           # Bibliotecas externas
+
+mobile/            # Versão mobile (PWA)
+├── index.html     # Página principal mobile
+├── styles.css     # Estilos mobile
+├── app.js         # Lógica principal mobile
+├── manifest.json  # Configuração PWA
+├── service-worker.js # Service Worker para offline
+└── icons/         # Ícones para PWA
 ```
 
 ## 🔐 Segurança
@@ -55,10 +69,22 @@ docs/
 - Tokens JWT para sessões
 - Dados criptografados em trânsito
 - Regras de segurança do Firestore
+- Armazenamento seguro offline
+
+## 📱 Versão Mobile (PWA)
+
+A versão mobile oferece:
+- Interface otimizada para smartphones
+- Funcionamento offline
+- Instalável como aplicativo
+- Sincronização automática
+- Gestos e animações otimizados
+- Tema adaptativo (claro/escuro)
 
 ## 🌐 Demo
 
-O projeto está disponível em: [https://gabriellsd.github.io/GDFinances/](https://gabriellsd.github.io/GDFinances/)
+- Versão Web: [https://gabriellsd.github.io/GDFinances](https://gabriellsd.github.io/GDFinances)
+- Versão Mobile: [https://gabriellsd.github.io/GDFinances/mobile](https://gabriellsd.github.io/GDFinances/mobile)
 
 ## 📝 Licença
 
