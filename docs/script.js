@@ -159,25 +159,34 @@ async function initSQLite() {
             } else {
                 console.log('Criando novo banco de dados...');
                 sqliteDB = new SQL.Database();
-                // Criar as tabelas necessárias
+                // Criar todas as tabelas necessárias
                 sqliteDB.run(`
+                    -- Tabela de usuários
                     CREATE TABLE IF NOT EXISTS users (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         email TEXT UNIQUE NOT NULL,
-                        password TEXT NOT NULL
+                        password TEXT NOT NULL,
+                        name TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     );
                     
+                    -- Tabela de contas
                     CREATE TABLE IF NOT EXISTS accounts (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id INTEGER NOT NULL,
                         name TEXT NOT NULL,
                         type TEXT NOT NULL,
-                        balance REAL NOT NULL,
-                        color TEXT,
-                        icon TEXT,
+                        balance REAL NOT NULL DEFAULT 0,
+                        color TEXT DEFAULT '#10B981',
+                        icon TEXT DEFAULT 'bank',
+                        credit_limit REAL,
+                        due_date INTEGER,
+                        closing_date INTEGER,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id)
                     );
                     
+                    -- Tabela de transações
                     CREATE TABLE IF NOT EXISTS transactions (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         account_id INTEGER NOT NULL,
@@ -187,8 +196,56 @@ async function initSQLite() {
                         date TEXT NOT NULL,
                         description TEXT,
                         tags TEXT,
+                        status TEXT DEFAULT 'confirmed',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (account_id) REFERENCES accounts(id)
                     );
+                    
+                    -- Tabela de orçamentos
+                    CREATE TABLE IF NOT EXISTS budgets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        category TEXT NOT NULL,
+                        limit_amount REAL NOT NULL,
+                        month TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    );
+                    
+                    -- Tabela de metas
+                    CREATE TABLE IF NOT EXISTS goals (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        target_amount REAL NOT NULL,
+                        current_amount REAL DEFAULT 0,
+                        deadline DATE NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    );
+                    
+                    -- Tabela de categorias
+                    CREATE TABLE IF NOT EXISTS categories (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        color TEXT DEFAULT '#10B981',
+                        icon TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    );
+                    
+                    -- Inserir categorias padrão
+                    INSERT OR IGNORE INTO categories (user_id, name, type, color, icon) VALUES
+                    (1, 'Salário', 'income', '#10B981', 'wallet'),
+                    (1, 'Investimentos', 'income', '#6366F1', 'investment'),
+                    (1, 'Alimentação', 'expense', '#EF4444', 'food'),
+                    (1, 'Transporte', 'expense', '#F59E0B', 'transport'),
+                    (1, 'Moradia', 'expense', '#3B82F6', 'home'),
+                    (1, 'Saúde', 'expense', '#EC4899', 'health'),
+                    (1, 'Educação', 'expense', '#8B5CF6', 'education'),
+                    (1, 'Lazer', 'expense', '#F97316', 'entertainment');
                 `);
                 await saveDatabase();
             }
@@ -528,31 +585,173 @@ async function getTransactions(filters = {}) {
 
 // Funções de orçamento
 async function createBudget(category, limitAmount, month) {
-    return await api('budgets', 'POST', {
-        category,
-        limit_amount: limitAmount,
-        month
-    });
+    if (!currentUser) return false;
+    
+    try {
+        sqliteDB.run(`
+            INSERT INTO budgets (user_id, category, limit_amount, month)
+            VALUES (?, ?, ?, ?)
+        `, [currentUser.id, category, limitAmount, month]);
+        
+        await saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao criar orçamento:', error);
+        return false;
+    }
 }
 
 async function getBudgets(month = null) {
-    const queryParams = month ? `?month=${month}` : '';
-    const response = await api(`budgets${queryParams}`);
-    return response.success ? response.data : [];
+    if (!currentUser) return [];
+    
+    try {
+        let query = `
+            SELECT b.*, 
+                   COALESCE(SUM(t.amount), 0) as spent
+            FROM budgets b
+            LEFT JOIN transactions t ON t.category = b.category 
+                AND strftime('%Y-%m', t.date) = b.month
+            WHERE b.user_id = ?
+        `;
+        
+        const params = [currentUser.id];
+        
+        if (month) {
+            query += ' AND b.month = ?';
+            params.push(month);
+        }
+        
+        query += ' GROUP BY b.id';
+        
+        const result = sqliteDB.exec(query, params);
+        return result[0]?.values.map(row => ({
+            id: row[0],
+            category: row[1],
+            limitAmount: row[2],
+            month: row[3],
+            spent: row[4]
+        })) || [];
+    } catch (error) {
+        console.error('Erro ao buscar orçamentos:', error);
+        return [];
+    }
+}
+
+async function updateBudget(id, limitAmount) {
+    if (!currentUser) return false;
+    
+    try {
+        sqliteDB.run(`
+            UPDATE budgets 
+            SET limit_amount = ?
+            WHERE id = ? AND user_id = ?
+        `, [limitAmount, id, currentUser.id]);
+        
+        await saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao atualizar orçamento:', error);
+        return false;
+    }
+}
+
+async function deleteBudget(id) {
+    if (!currentUser) return false;
+    
+    try {
+        sqliteDB.run(`
+            DELETE FROM budgets 
+            WHERE id = ? AND user_id = ?
+        `, [id, currentUser.id]);
+        
+        await saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao deletar orçamento:', error);
+        return false;
+    }
 }
 
 // Funções de meta
-async function createGoal(name, target, deadline) {
-    return await api('goals', 'POST', { name, target, deadline });
+async function createGoal(name, target, deadline, initialAmount = 0) {
+    if (!currentUser) return false;
+    
+    try {
+        sqliteDB.run(`
+            INSERT INTO goals (user_id, name, target_amount, current_amount, deadline, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+        `, [currentUser.id, name, target, initialAmount, deadline]);
+        
+        await saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao criar meta:', error);
+        return false;
+    }
 }
 
 async function getGoals() {
-    const response = await api('goals');
-    return response.success ? response.data : [];
+    if (!currentUser) return [];
+    
+    try {
+        const result = sqliteDB.exec(`
+            SELECT id, name, target_amount, current_amount, deadline, created_at,
+                   (current_amount / target_amount * 100) as progress,
+                   (julianday(deadline) - julianday('now')) as days_remaining
+            FROM goals
+            WHERE user_id = ?
+            ORDER BY deadline ASC
+        `, [currentUser.id]);
+        
+        return result[0]?.values.map(row => ({
+            id: row[0],
+            name: row[1],
+            targetAmount: row[2],
+            currentAmount: row[3],
+            deadline: row[4],
+            createdAt: row[5],
+            progress: row[6],
+            daysRemaining: Math.ceil(row[7])
+        })) || [];
+    } catch (error) {
+        console.error('Erro ao buscar metas:', error);
+        return [];
+    }
 }
 
-async function updateGoalProgress(id, progress) {
-    return await api(`goals/${id}/progress`, 'PUT', { progress });
+async function updateGoalProgress(id, amount) {
+    if (!currentUser) return false;
+    
+    try {
+        sqliteDB.run(`
+            UPDATE goals 
+            SET current_amount = current_amount + ?
+            WHERE id = ? AND user_id = ?
+        `, [amount, id, currentUser.id]);
+        
+        await saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao atualizar progresso da meta:', error);
+        return false;
+    }
+}
+
+async function deleteGoal(id) {
+    if (!currentUser) return false;
+    
+    try {
+        sqliteDB.run(`
+            DELETE FROM goals 
+            WHERE id = ? AND user_id = ?
+        `, [id, currentUser.id]);
+        
+        await saveDatabase();
+        return true;
+    } catch (error) {
+        console.error('Erro ao deletar meta:', error);
+        return false;
+    }
 }
 
 // Funções de UI
@@ -1368,29 +1567,81 @@ function setupNewButton() {
     });
 }
 
-// Inicialização
 async function init() {
-    await initSQLite();
-    setupTheme();
-    setupLogin();
-    setupRegisterModal();
-    setupDashboardNavigation();
-    setupNewButton();
-    setupAccountModal();
-    setupTransactionModal();
-    setupBudgetModal();
-    setupGoalModal();
-    
-    // Configurar botão de logout
-    document.getElementById('logout').addEventListener('click', logout);
-    
-    // Verifica se há um token salvo
-    if (token) {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboardOverview();
+    try {
+        console.log('Iniciando aplicação...');
+        
+        // Inicializar SQLite
+        const sqliteInitialized = await initSQLite();
+        if (!sqliteInitialized) {
+            throw new Error('Falha ao inicializar SQLite');
+        }
+        
+        // Configurar tema
+        setupTheme();
+        
+        // Verificar autenticação
+        const token = localStorage.getItem('token');
+        if (token) {
+            const userData = JSON.parse(atob(token.split('.')[1]));
+            currentUser = {
+                id: userData.id,
+                email: userData.email,
+                name: userData.name
+            };
+            
+            // Inicializar dashboard
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'flex';
+            
+            // Carregar dados do dashboard
+            await Promise.all([
+                updateDashboardCards(),
+                updateCashFlowChart(),
+                updateExpensesChart(),
+                renderAccounts(),
+                updateDashboardOverview()
+            ]);
+            
+            // Configurar modais e navegação
+            setupAccountModal();
+            setupTransactionModal();
+            setupBudgetModal();
+            setupGoalModal();
+            setupDashboardNavigation();
+            setupNewButton();
+            
+            // Atualizar dados periodicamente
+            setInterval(async () => {
+                await Promise.all([
+                    updateDashboardCards(),
+                    updateCashFlowChart(),
+                    updateExpensesChart()
+                ]);
+            }, 300000); // Atualizar a cada 5 minutos
+        } else {
+            // Mostrar tela de login
+            document.getElementById('loginContainer').style.display = 'flex';
+            document.getElementById('dashboard').style.display = 'none';
+            setupLogin();
+            setupRegisterModal();
+        }
+        
+        // Remover tela de carregamento
+        document.getElementById('loading').style.display = 'none';
+        
+        console.log('Aplicação iniciada com sucesso!');
+    } catch (error) {
+        console.error('Erro ao iniciar aplicação:', error);
+        document.getElementById('loading').innerHTML = `
+            <div class="error-container">
+                <h2>Erro ao iniciar aplicação</h2>
+                <p>${error.message}</p>
+                <button onclick="location.reload()">Tentar Novamente</button>
+            </div>
+        `;
     }
 }
 
-// Iniciar aplicação
+// Iniciar aplicação quando o DOM estiver carregado
 document.addEventListener('DOMContentLoaded', init);
