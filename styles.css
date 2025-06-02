@@ -313,14 +313,18 @@ body.light .input-icon input::placeholder {
 @media (max-width: 768px) {
     .login-container {
         flex-direction: column;
+        max-width: 100%;
+        margin: 10px;
+        height: auto;
     }
 
     .login-illustration {
-        padding: 40px 20px;
+        display: none;
     }
 
     .login-content {
-        padding: 30px 20px;
+        padding: 20px;
+        width: 100%;
     }
 
     .illustration-icon {
@@ -1388,103 +1392,89 @@ body.dark .moon-icon { display: block; }
     border-left: 3px solid var(--primary-color);
 }
 
-/* Responsividade */
+/* Responsividade Mobile */
 @media (max-width: 768px) {
-    /* Layout Principal */
+    /* Login */
+    .login-container {
+        flex-direction: column;
+        max-width: 100%;
+        margin: 10px;
+        height: auto;
+    }
+
+    .login-illustration {
+        display: none;
+    }
+
+    .login-content {
+        padding: 20px;
+        width: 100%;
+    }
+
+    /* Dashboard */
     #dashboard {
         flex-direction: column;
     }
 
-    /* Sidebar */
     .sidebar {
-        width: 100%;
         position: fixed;
         bottom: 0;
         left: 0;
         right: 0;
-        padding: 8px;
-        border-right: none;
-        border-top: 1px solid var(--border-color);
-        z-index: 100;
-        height: auto;
-    }
-
-    .sidebar-header {
-        display: none;
-    }
-
-    .new-button {
-        margin: 0;
-        padding: 0;
-        position: fixed;
-        bottom: 80px;
-        right: 16px;
-        width: auto;
-    }
-
-    .new-button .btn-primary {
-        width: 56px;
-        height: 56px;
-        padding: 0;
-        border-radius: 50%;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-
-    .new-button .btn-primary span {
-        display: none;
-    }
-
-    /* Dropdown do botão Novo */
-    .dropdown-menu {
-        bottom: calc(100% + 8px);
         top: auto;
-        left: auto;
-        right: 0;
-        width: 280px;
+        width: 100%;
+        height: 60px;
+        padding: 0;
+        z-index: 1000;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        backdrop-filter: blur(10px);
     }
 
-    /* Menu de Navegação */
+    .sidebar-header, .sidebar-footer {
+        display: none;
+    }
+
     .sidebar-nav {
+        width: 100%;
         margin: 0;
     }
 
     .sidebar-nav ul {
         display: flex;
         justify-content: space-around;
-        margin: 0;
         padding: 0;
+        margin: 0;
     }
 
     .sidebar-nav a {
+        padding: 10px;
         flex-direction: column;
-        padding: 8px;
-        margin: 0;
-        gap: 4px;
         font-size: 12px;
         text-align: center;
+        gap: 4px;
     }
 
-    .sidebar-nav .nav-icon {
+    .nav-icon {
         margin: 0;
-        width: 24px;
-        height: 24px;
+        font-size: 20px;
     }
 
-    /* Conteúdo Principal */
     .main-content {
-        margin-bottom: 80px;
-        padding: 16px;
+        margin-left: 0;
+        padding: 20px;
+        padding-bottom: 80px;
     }
 
     /* Cards */
     .dashboard-cards {
         grid-template-columns: 1fr;
-        gap: 16px;
+        gap: 15px;
     }
 
-    .accounts-grid {
-        grid-template-columns: 1fr;
-        padding: 8px;
+    .card {
+        padding: 15px;
     }
 
     /* Gráficos */
@@ -1492,31 +1482,131 @@ body.dark .moon-icon { display: block; }
         grid-template-columns: 1fr;
     }
 
-    /* Modais */
-    .modal-content {
-        margin: 16px;
-        max-height: calc(100vh - 32px);
-        overflow-y: auto;
+    .chart-container {
+        min-height: 300px;
     }
 
-    /* Botão de Logout */
-    .sidebar-footer {
+    /* Contas */
+    .accounts-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    /* Modal */
+    .modal-content {
+        width: 95%;
+        margin: 10px;
+        max-height: 90vh;
+    }
+
+    /* Botão Nova Transação */
+    .new-button {
+        position: fixed;
+        bottom: 70px;
+        right: 20px;
+        z-index: 1001;
+    }
+
+    .new-button .btn-primary {
+        width: 56px;
+        height: 56px;
+        border-radius: 28px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .new-button .btn-primary span {
         display: none;
+    }
+
+    .new-button .nav-icon {
+        margin: 0;
+        font-size: 24px;
+    }
+
+    /* Menu Dropdown */
+    .dropdown-menu {
+        bottom: 70px;
+        right: 20px;
+        top: auto;
+        transform-origin: bottom right;
     }
 }
 
 /* Ajustes para telas muito pequenas */
 @media (max-width: 360px) {
-    .dropdown-menu {
-        width: 240px;
-    }
-
     .sidebar-nav a {
+        padding: 8px;
         font-size: 10px;
     }
 
-    .sidebar-nav .nav-icon {
-        width: 20px;
-        height: 20px;
+    .nav-icon {
+        font-size: 18px;
+    }
+
+    .modal-content {
+        width: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+}
+
+/* Melhorias de usabilidade para touch */
+@media (hover: none) {
+    /* Remover hover states em dispositivos touch */
+    .sidebar-nav a:hover,
+    .btn-primary:hover,
+    .account-card:hover {
+        transform: none;
+    }
+
+    /* Aumentar área de toque */
+    .sidebar-nav a,
+    .btn-primary,
+    .form-group input,
+    .modal-close {
+        min-height: 44px;
+    }
+
+    /* Melhorar feedback de toque */
+    .sidebar-nav a:active,
+    .btn-primary:active,
+    .account-card:active {
+        opacity: 0.7;
+        transition: opacity 0.1s;
+    }
+}
+
+/* Suporte a gestos */
+.swipeable {
+    touch-action: pan-y;
+    user-select: none;
+}
+
+/* Safe areas para dispositivos modernos */
+@supports (padding: max(0px)) {
+    .sidebar {
+        padding-bottom: max(0px, env(safe-area-inset-bottom));
+        height: calc(60px + env(safe-area-inset-bottom));
+    }
+
+    .main-content {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    }
+
+    .new-button {
+        bottom: calc(70px + env(safe-area-inset-bottom));
+    }
+}
+
+/* Dark mode adaptativo */
+@media (prefers-color-scheme: dark) {
+    body:not(.light) {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --text-primary: #f8fafc;
+        --text-secondary: rgba(248, 250, 252, 0.7);
     }
 }
