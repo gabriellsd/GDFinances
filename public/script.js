@@ -79,15 +79,74 @@ async function api(endpoint, method = 'GET', body = null) {
 
 // Funções de autenticação
 async function login(email, password) {
-    const data = await api('login', 'POST', { email, password });
-    
-    if (data.success) {
-        token = data.token;
+    try {
+        console.log('Iniciando processo de login...', { email });
+        
+        if (!sqliteDB) {
+            console.log('Banco de dados não inicializado, tentando inicializar...');
+            const initialized = await initSQLite();
+            if (!initialized) {
+                console.error('Falha ao inicializar banco de dados');
+                throw new Error('database_init_failed');
+            }
+            console.log('Banco de dados inicializado com sucesso');
+        }
+
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        console.log('Login bem-sucedido!', { userId: user.uid });
+        
+        // Salvar token e dados do usuário
+        token = await user.getIdToken();
         localStorage.setItem('token', token);
+        currentUser = { id: user.uid, email: user.email };
+        
+        // Atualizar interface
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        updateDashboardOverview();
         return true;
+    } catch (error) {
+        console.error('Erro no login:', error.code, error.message);
+        let errorMessage = 'Email ou senha inválidos';
+        
+        switch (error.code) {
+            case 'auth/user-not-found':
+                errorMessage = 'Usuário não encontrado';
+                break;
+            case 'auth/wrong-password':
+                errorMessage = 'Senha incorreta';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = 'Email inválido';
+                break;
+            case 'auth/too-many-requests':
+                errorMessage = 'Muitas tentativas. Tente novamente mais tarde';
+                break;
+            case 'database_init_failed':
+                errorMessage = 'Erro ao inicializar o banco de dados. Tente recarregar a página.';
+                break;
+            case 'auth/network-request-failed':
+                errorMessage = 'Erro de conexão. Verifique sua internet.';
+                break;
+            default:
+                errorMessage = 'Erro ao fazer login. Tente novamente.';
+        }
+        
+        const errorElement = document.getElementById('login-error');
+        errorElement.textContent = errorMessage;
+        errorElement.style.display = 'block';
+        
+        // Feedback visual no botão de login
+        const loginButton = document.querySelector('.login-button');
+        if (loginButton) {
+            loginButton.classList.add('error');
+            setTimeout(() => loginButton.classList.remove('error'), 1000);
+        }
+        
+        return false;
     }
-    
-    return false;
 }
 
 async function register(email, password) {
@@ -796,36 +855,49 @@ function setupGoalModal() {
 function setupLogin() {
     const form = document.getElementById('login-form');
     const errorMessage = document.getElementById('login-error');
+    const loginButton = form.querySelector('.login-button');
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        const email = document.getElementById('email').value;
+        // Desabilitar o botão durante o login
+        loginButton.disabled = true;
+        loginButton.innerHTML = '<span>Entrando...</span>';
+        errorMessage.style.display = 'none';
+        
+        const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
         
         const success = await login(email, password);
         
-        if (success) {
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            updateDashboardOverview();
-        } else {
-            errorMessage.style.display = 'block';
-            errorMessage.textContent = 'Email ou senha inválidos';
+        // Restaurar o botão
+        loginButton.disabled = false;
+        loginButton.innerHTML = '<span>Acessar</span>';
+        
+        if (!success) {
+            // Vibrar em dispositivos móveis
+            if ('vibrate' in navigator) {
+                navigator.vibrate(200);
+            }
+            
+            // Focar no campo com erro
+            if (errorMessage.textContent.includes('email')) {
+                document.getElementById('email').focus();
+            } else if (errorMessage.textContent.includes('senha')) {
+                document.getElementById('password').focus();
+            }
         }
     });
     
-    // Toggle password visibility
-    const togglePassword = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('password');
-    const showIcon = togglePassword.querySelector('.show-password');
-    const hideIcon = togglePassword.querySelector('.hide-password');
-    
-    togglePassword.addEventListener('click', () => {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        showIcon.style.display = type === 'password' ? 'block' : 'none';
-        hideIcon.style.display = type === 'password' ? 'none' : 'block';
+    // Melhorar experiência do teclado virtual
+    const inputs = form.querySelectorAll('input');
+    inputs.forEach(input => {
+        input.addEventListener('focus', () => {
+            // Scroll suave para o campo em foco
+            setTimeout(() => {
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+        });
     });
 }
 
