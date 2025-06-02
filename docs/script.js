@@ -1,3 +1,22 @@
+import {
+    loginWithEmail,
+    registerWithEmail,
+    logoutUser,
+    createAccount,
+    getAccounts,
+    updateAccount,
+    deleteAccount,
+    createTransaction,
+    getTransactions,
+    createBudget,
+    getBudgets,
+    createGoal,
+    getGoals,
+    updateGoalProgress
+} from './firebase-functions.js';
+
+import { auth, onAuthStateChanged } from './firebase-config.js';
+
 console.log("GDFinances iniciado!");
 
 // Configuração inicial do tema
@@ -261,54 +280,21 @@ async function initSQLite() {
 // Funções de autenticação
 async function login(email, password) {
     try {
-        console.log('Iniciando processo de login...', { email });
-        
-        if (!sqliteDB) {
-            console.log('Banco de dados não inicializado, tentando inicializar...');
-            const initialized = await initSQLite();
-            if (!initialized) {
-                console.error('Falha ao inicializar banco de dados');
-                return false;
-            }
-            console.log('Banco de dados inicializado com sucesso');
+        const result = await loginWithEmail(email, password);
+        if (result.success) {
+            currentUser = result.user;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'flex';
+            await updateDashboardOverview();
+            showNotification('Login realizado com sucesso!');
+            return true;
+        } else {
+            throw new Error(result.error);
         }
-
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        
-        console.log('Login bem-sucedido!', { userId: user.uid });
-        
-        // Salvar token e dados do usuário
-        token = await user.getIdToken();
-        localStorage.setItem('token', token);
-        currentUser = { id: user.uid, email: user.email };
-        
-        // Atualizar interface
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboardOverview();
-        return true;
     } catch (error) {
-        console.error('Erro no login:', error.code, error.message);
-        let errorMessage = 'Email ou senha inválidos';
-        
-        switch (error.code) {
-            case 'auth/user-not-found':
-                errorMessage = 'Usuário não encontrado';
-                break;
-            case 'auth/wrong-password':
-                errorMessage = 'Senha incorreta';
-                break;
-            case 'auth/invalid-email':
-                errorMessage = 'Email inválido';
-                break;
-            case 'auth/too-many-requests':
-                errorMessage = 'Muitas tentativas. Tente novamente mais tarde';
-                break;
-        }
-        
+        console.error('Erro no login:', error);
         const errorElement = document.getElementById('login-error');
-        errorElement.textContent = errorMessage;
+        errorElement.textContent = 'Email ou senha inválidos';
         errorElement.style.display = 'block';
         return false;
     }
@@ -316,91 +302,44 @@ async function login(email, password) {
 
 async function register(email, password) {
     try {
-        console.log('Iniciando processo de registro...', { email });
-        
-        // Validar senha
-        if (password.length < 6) {
-            throw { code: 'auth/weak-password', message: 'A senha deve ter pelo menos 6 caracteres' };
+        const result = await registerWithEmail(email, password);
+        if (result.success) {
+            currentUser = result.user;
+            document.getElementById('registerModal').classList.remove('active');
+            setTimeout(() => {
+                document.getElementById('registerModal').style.display = 'none';
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'flex';
+                updateDashboardOverview();
+            }, 300);
+            showNotification('Conta criada com sucesso!');
+            return true;
+        } else {
+            throw new Error(result.error);
         }
-        
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        
-        console.log('Registro bem-sucedido!', { userId: user.uid });
-        
-        // Criar documento do usuário no Firestore
-        await firestoreDB.collection('users').doc(user.uid).set({
-            email: user.email,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Salvar token e dados do usuário
-        token = await user.getIdToken();
-        localStorage.setItem('token', token);
-        currentUser = { id: user.uid, email: user.email };
-        
-        // Atualizar interface
-        document.getElementById('registerModal').classList.remove('active');
-        setTimeout(() => {
-            document.getElementById('registerModal').style.display = 'none';
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            updateDashboardOverview();
-        }, 300);
-        
-        return true;
     } catch (error) {
-        console.error('Erro no registro:', error.code, error.message);
-        let errorMessage = 'Erro ao criar conta';
-        
-        switch (error.code) {
-            case 'auth/email-already-in-use':
-                errorMessage = 'Este email já está em uso';
-                break;
-            case 'auth/invalid-email':
-                errorMessage = 'Email inválido';
-                break;
-            case 'auth/weak-password':
-                errorMessage = 'A senha deve ter pelo menos 6 caracteres';
-                break;
-            case 'auth/operation-not-allowed':
-                errorMessage = 'Criação de conta desativada';
-                break;
-        }
-        
+        console.error('Erro no registro:', error);
         const errorElement = document.getElementById('register-error');
-        errorElement.textContent = errorMessage;
+        errorElement.textContent = 'Erro ao criar conta. Tente novamente.';
         errorElement.style.display = 'block';
         return false;
     }
 }
 
-function logout() {
-    auth.signOut().then(() => {
-        token = null;
-        currentUser = null;
-        localStorage.removeItem('token');
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('dashboard').style.display = 'none';
-    }).catch((error) => {
+async function logout() {
+    try {
+        const result = await logoutUser();
+        if (result.success) {
+            currentUser = null;
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('dashboard').style.display = 'none';
+            showNotification('Logout realizado com sucesso!');
+        }
+    } catch (error) {
         console.error('Erro ao fazer logout:', error);
-    });
-}
-
-// Verificar estado da autenticação ao carregar a página
-auth.onAuthStateChanged((user) => {
-    if (user) {
-        console.log('Usuário já autenticado:', user.email);
-        currentUser = { id: user.uid, email: user.email };
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboardOverview();
-    } else {
-        console.log('Usuário não autenticado');
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('dashboard').style.display = 'none';
+        showNotification('Erro ao fazer logout', 'error');
     }
-});
+}
 
 // Funções de conta
 async function createAccount(name, type, balance, color = '#10B981', icon = 'bank', creditCardInfo = {}) {
@@ -787,20 +726,27 @@ function getLastSixMonths() {
 }
 
 async function updateDashboardCards() {
-    const transactions = await getTransactions();
-    const accounts = await getAccounts();
-    
-    const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
-    const monthlyIncome = transactions
-        .filter(t => t.type === 'income' && new Date(t.date).getMonth() === new Date().getMonth())
-        .reduce((sum, t) => sum + t.amount, 0);
-    const monthlyExpense = transactions
-        .filter(t => t.type === 'expense' && new Date(t.date).getMonth() === new Date().getMonth())
-        .reduce((sum, t) => sum + t.amount, 0);
-    
-    document.getElementById('totalBalance').textContent = formatCurrency(totalBalance);
-    document.getElementById('monthlyIncome').textContent = formatCurrency(monthlyIncome);
-    document.getElementById('monthlyExpense').textContent = formatCurrency(monthlyExpense);
+    if (!currentUser) return;
+
+    try {
+        const { transactions } = await getTransactions(currentUser.uid);
+        const { accounts } = await getAccounts(currentUser.uid);
+        
+        const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+        const monthlyIncome = transactions
+            .filter(t => t.type === 'income' && new Date(t.date).getMonth() === new Date().getMonth())
+            .reduce((sum, t) => sum + t.amount, 0);
+        const monthlyExpense = transactions
+            .filter(t => t.type === 'expense' && new Date(t.date).getMonth() === new Date().getMonth())
+            .reduce((sum, t) => sum + t.amount, 0);
+        
+        document.getElementById('totalBalance').textContent = formatCurrency(totalBalance);
+        document.getElementById('monthlyIncome').textContent = formatCurrency(monthlyIncome);
+        document.getElementById('monthlyExpense').textContent = formatCurrency(monthlyExpense);
+    } catch (error) {
+        console.error('Erro ao atualizar cards:', error);
+        showNotification('Erro ao atualizar informações', 'error');
+    }
 }
 
 async function updateCashFlowChart() {
@@ -1567,6 +1513,14 @@ function setupNewButton() {
     });
 }
 
+function showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 3000);
+}
+
 async function init() {
     try {
         console.log('Iniciando aplicação...');
@@ -1581,51 +1535,45 @@ async function init() {
         setupTheme();
         
         // Verificar autenticação
-        const token = localStorage.getItem('token');
-        if (token) {
-            const userData = JSON.parse(atob(token.split('.')[1]));
-            currentUser = {
-                id: userData.id,
-                email: userData.email,
-                name: userData.name
-            };
-            
-            // Inicializar dashboard
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            
-            // Carregar dados do dashboard
-            await Promise.all([
-                updateDashboardCards(),
-                updateCashFlowChart(),
-                updateExpensesChart(),
-                renderAccounts(),
-                updateDashboardOverview()
-            ]);
-            
-            // Configurar modais e navegação
-            setupAccountModal();
-            setupTransactionModal();
-            setupBudgetModal();
-            setupGoalModal();
-            setupDashboardNavigation();
-            setupNewButton();
-            
-            // Atualizar dados periodicamente
-            setInterval(async () => {
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'flex';
+                
+                // Carregar dados do dashboard
                 await Promise.all([
                     updateDashboardCards(),
                     updateCashFlowChart(),
-                    updateExpensesChart()
+                    updateExpensesChart(),
+                    renderAccounts(),
+                    updateDashboardOverview()
                 ]);
-            }, 300000); // Atualizar a cada 5 minutos
-        } else {
-            // Mostrar tela de login
-            document.getElementById('loginContainer').style.display = 'flex';
-            document.getElementById('dashboard').style.display = 'none';
-            setupLogin();
-            setupRegisterModal();
-        }
+                
+                // Configurar modais e navegação
+                setupAccountModal();
+                setupTransactionModal();
+                setupBudgetModal();
+                setupGoalModal();
+                setupDashboardNavigation();
+                setupNewButton();
+                
+                // Atualizar dados periodicamente
+                setInterval(async () => {
+                    await Promise.all([
+                        updateDashboardCards(),
+                        updateCashFlowChart(),
+                        updateExpensesChart()
+                    ]);
+                }, 300000); // Atualizar a cada 5 minutos
+            } else {
+                // Mostrar tela de login
+                document.getElementById('loginContainer').style.display = 'flex';
+                document.getElementById('dashboard').style.display = 'none';
+                setupLogin();
+                setupRegisterModal();
+            }
+        });
         
         // Remover tela de carregamento
         document.getElementById('loading').style.display = 'none';
