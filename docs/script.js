@@ -6,10 +6,9 @@ document.body.classList.toggle('dark', prefersDark);
 document.body.classList.toggle('light', !prefersDark);
 
 // Variáveis globais
-let sqliteDB;
+let db;
 let token = localStorage.getItem('token');
 let currentUser = null;
-let SQL;
 
 // Definição dos ícones
 const icons = {
@@ -49,156 +48,33 @@ if (savedTheme) {
     document.body.classList.add(savedTheme);
 }
 
-// Funções para persistência no IndexedDB
-async function openIndexedDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('GDFinances', 1);
-        
-        request.onerror = () => {
-            console.error('Erro ao abrir IndexedDB');
-            reject(request.error);
-        };
-        
-        request.onsuccess = () => {
-            resolve(request.result);
-        };
-        
-        request.onupgradeneeded = (event) => {
-            const idb = event.target.result;
-            if (!idb.objectStoreNames.contains('database')) {
-                idb.createObjectStore('database');
-            }
-        };
-    });
-}
-
-async function saveToIndexedDB(data) {
-    try {
-        const idb = await openIndexedDB();
-        const transaction = idb.transaction(['database'], 'readwrite');
-        const store = transaction.objectStore('database');
-        
-        return new Promise((resolve, reject) => {
-            const request = store.put(data, 'sqliteDB');
-            
-            request.onsuccess = () => {
-                console.log('Banco de dados salvo no IndexedDB');
-                resolve(true);
-            };
-            
-            request.onerror = () => {
-                console.error('Erro ao salvar no IndexedDB');
-                reject(request.error);
-            };
-        });
-    } catch (error) {
-        console.error('Erro ao salvar no IndexedDB:', error);
-        return false;
-    }
-}
-
-async function loadFromIndexedDB() {
-    try {
-        const idb = await openIndexedDB();
-        const transaction = idb.transaction(['database'], 'readonly');
-        const store = transaction.objectStore('database');
-        
-        return new Promise((resolve, reject) => {
-            const request = store.get('sqliteDB');
-            
-            request.onsuccess = () => {
-                resolve(request.result);
-            };
-            
-            request.onerror = () => {
-                console.error('Erro ao carregar do IndexedDB');
-                reject(request.error);
-            };
-        });
-    } catch (error) {
-        console.error('Erro ao carregar do IndexedDB:', error);
-        return null;
-    }
-}
-
-// Modificar a função saveDatabase para usar IndexedDB
-async function saveDatabase() {
-    const data = sqliteDB.export();
-    const array = Array.from(data);
-    localStorage.setItem('database', array.toString());
+// Funções de API
+async function api(endpoint, method = 'GET', body = null) {
+    const headers = {
+        'Content-Type': 'application/json'
+    };
     
-    // Salvar também no IndexedDB
-    await saveToIndexedDB(array);
-}
-
-// Modificar a função initSQLite para carregar do IndexedDB
-async function initSQLite() {
-    try {
-        console.log('Iniciando SQLite...');
-        const sqlPromise = await initSqlJs({
-            locateFile: file => `lib/${file}`
-        });
-        SQL = sqlPromise;
-        console.log('SQL.js carregado com sucesso!');
-        
-        // Tentar carregar do IndexedDB primeiro
-        const indexedDBData = await loadFromIndexedDB();
-        if (indexedDBData) {
-            console.log('Carregando banco de dados do IndexedDB...');
-            const uint8Array = new Uint8Array(indexedDBData);
-            sqliteDB = new SQL.Database(uint8Array);
-        } else {
-            // Se não houver dados no IndexedDB, tentar localStorage
-            const localData = localStorage.getItem('database');
-            if (localData) {
-                console.log('Carregando banco de dados do localStorage...');
-                const uint8Array = new Uint8Array(localData.split(',').map(Number));
-                sqliteDB = new SQL.Database(uint8Array);
-                // Salvar no IndexedDB para futuro
-                await saveToIndexedDB(Array.from(uint8Array));
-            } else {
-                console.log('Criando novo banco de dados...');
-                sqliteDB = new SQL.Database();
-                // Criar as tabelas necessárias
-                sqliteDB.run(`
-                    CREATE TABLE IF NOT EXISTS users (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        email TEXT UNIQUE NOT NULL,
-                        password TEXT NOT NULL
-                    );
-                    
-                    CREATE TABLE IF NOT EXISTS accounts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        name TEXT NOT NULL,
-                        type TEXT NOT NULL,
-                        balance REAL NOT NULL,
-                        color TEXT,
-                        icon TEXT,
-                        FOREIGN KEY (user_id) REFERENCES users(id)
-                    );
-                    
-                    CREATE TABLE IF NOT EXISTS transactions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        account_id INTEGER NOT NULL,
-                        type TEXT NOT NULL,
-                        amount REAL NOT NULL,
-                        category TEXT,
-                        date TEXT NOT NULL,
-                        description TEXT,
-                        tags TEXT,
-                        FOREIGN KEY (account_id) REFERENCES accounts(id)
-                    );
-                `);
-                await saveDatabase();
-            }
-        }
-        console.log('SQLite inicializado com sucesso!');
-        return true;
-    } catch (error) {
-        console.error('Erro ao inicializar SQLite:', error);
-        return false;
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
     }
+    
+    const options = {
+        method,
+        headers
+    };
+    
+    if (body) {
+        options.body = JSON.stringify(body);
+    }
+    
+    const response = await fetch(`/api/${endpoint}`, options);
+    const data = await response.json();
+    
+    if (!data.success && data.message === 'Token inválido') {
+        logout();
+    }
+    
+    return data;
 }
 
 // Funções de autenticação
@@ -211,7 +87,7 @@ async function login(email, password) {
             const initialized = await initSQLite();
             if (!initialized) {
                 console.error('Falha ao inicializar banco de dados');
-                return false;
+                throw new Error('database_init_failed');
             }
             console.log('Banco de dados inicializado com sucesso');
         }
@@ -248,282 +124,104 @@ async function login(email, password) {
             case 'auth/too-many-requests':
                 errorMessage = 'Muitas tentativas. Tente novamente mais tarde';
                 break;
+            case 'database_init_failed':
+                errorMessage = 'Erro ao inicializar o banco de dados. Tente recarregar a página.';
+                break;
+            case 'auth/network-request-failed':
+                errorMessage = 'Erro de conexão. Verifique sua internet.';
+                break;
+            default:
+                errorMessage = 'Erro ao fazer login. Tente novamente.';
         }
         
         const errorElement = document.getElementById('login-error');
         errorElement.textContent = errorMessage;
         errorElement.style.display = 'block';
+        
+        // Feedback visual no botão de login
+        const loginButton = document.querySelector('.login-button');
+        if (loginButton) {
+            loginButton.classList.add('error');
+            setTimeout(() => loginButton.classList.remove('error'), 1000);
+        }
+        
         return false;
     }
 }
 
 async function register(email, password) {
-    try {
-        console.log('Iniciando processo de registro...', { email });
-        
-        // Validar senha
-        if (password.length < 6) {
-            throw { code: 'auth/weak-password', message: 'A senha deve ter pelo menos 6 caracteres' };
-        }
-        
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        
-        console.log('Registro bem-sucedido!', { userId: user.uid });
-        
-        // Criar documento do usuário no Firestore
-        await firestoreDB.collection('users').doc(user.uid).set({
-            email: user.email,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Salvar token e dados do usuário
-        token = await user.getIdToken();
+    const data = await api('register', 'POST', { email, password });
+    
+    if (data.success) {
+        token = data.token;
         localStorage.setItem('token', token);
-        currentUser = { id: user.uid, email: user.email };
-        
-        // Atualizar interface
-        document.getElementById('registerModal').classList.remove('active');
-        setTimeout(() => {
-            document.getElementById('registerModal').style.display = 'none';
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            updateDashboardOverview();
-        }, 300);
-        
         return true;
-    } catch (error) {
-        console.error('Erro no registro:', error.code, error.message);
-        let errorMessage = 'Erro ao criar conta';
-        
-        switch (error.code) {
-            case 'auth/email-already-in-use':
-                errorMessage = 'Este email já está em uso';
-                break;
-            case 'auth/invalid-email':
-                errorMessage = 'Email inválido';
-                break;
-            case 'auth/weak-password':
-                errorMessage = 'A senha deve ter pelo menos 6 caracteres';
-                break;
-            case 'auth/operation-not-allowed':
-                errorMessage = 'Criação de conta desativada';
-                break;
-        }
-        
-        const errorElement = document.getElementById('register-error');
-        errorElement.textContent = errorMessage;
-        errorElement.style.display = 'block';
-        return false;
     }
+    
+    return false;
 }
 
 function logout() {
-    auth.signOut().then(() => {
-        token = null;
-        currentUser = null;
-        localStorage.removeItem('token');
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('dashboard').style.display = 'none';
-    }).catch((error) => {
-        console.error('Erro ao fazer logout:', error);
-    });
+    token = null;
+    currentUser = null;
+    localStorage.removeItem('token');
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('dashboard').style.display = 'none';
 }
-
-// Verificar estado da autenticação ao carregar a página
-auth.onAuthStateChanged((user) => {
-    if (user) {
-        console.log('Usuário já autenticado:', user.email);
-        currentUser = { id: user.uid, email: user.email };
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboardOverview();
-    } else {
-        console.log('Usuário não autenticado');
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('dashboard').style.display = 'none';
-    }
-});
 
 // Funções de conta
 async function createAccount(name, type, balance, color = '#10B981', icon = 'bank', creditCardInfo = {}) {
-    try {
-        if (!currentUser) return false;
-        
-        sqliteDB.run(`
-            INSERT INTO accounts (user_id, name, type, balance, color, icon)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `, [currentUser.id, name, type, balance, color, icon]);
-        
-        if (type === 'credit_card' && creditCardInfo) {
-            const stmt = sqliteDB.prepare('SELECT last_insert_rowid() as id');
-            const { id } = stmt.getAsObject();
-            stmt.free();
-            
-            sqliteDB.run(`
-                INSERT INTO credit_cards (account_id, brand, closing_day, due_day, credit_limit)
-                VALUES (?, ?, ?, ?, ?)
-            `, [id, creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit]);
-        }
-        
-        saveDatabase();
-        return true;
-    } catch (error) {
-        console.error('Erro ao criar conta:', error);
-        return false;
-    }
+    return await api('accounts', 'POST', { name, type, balance, color, icon, creditCardInfo });
 }
 
 async function getAccounts() {
-    try {
-        if (!currentUser) return [];
-        
-        const stmt = sqliteDB.prepare(`
-            SELECT * FROM accounts 
-            WHERE user_id = ?
-            ORDER BY name
-        `);
-        
-        const accounts = [];
-        while (stmt.step()) {
-            const row = stmt.getAsObject();
-            accounts.push(row);
-        }
-        stmt.free();
-        
-        return accounts;
-    } catch (error) {
-        console.error('Erro ao buscar contas:', error);
-        return [];
-    }
+    const response = await api('accounts');
+    return response.success ? response.data : [];
 }
 
 async function updateAccount(id, name, type, balance, color, icon, creditCardInfo = {}) {
-    try {
-        if (!currentUser) return false;
-        
-        sqliteDB.run(`
-            UPDATE accounts 
-            SET name = ?, type = ?, balance = ?, color = ?, icon = ?
-            WHERE id = ? AND user_id = ?
-        `, [name, type, balance, color, icon, id, currentUser.id]);
-        
-        if (type === 'credit_card' && creditCardInfo) {
-            sqliteDB.run(`
-                UPDATE credit_cards 
-                SET brand = ?, closing_day = ?, due_day = ?, credit_limit = ?
-                WHERE account_id = ?
-            `, [creditCardInfo.card_brand, creditCardInfo.closing_day, creditCardInfo.due_day, creditCardInfo.credit_limit, id]);
-        }
-        
-        saveDatabase();
-        return true;
-    } catch (error) {
-        console.error('Erro ao atualizar conta:', error);
-        return false;
-    }
+    return await api(`accounts/${id}`, 'PUT', { name, type, balance, color, icon, creditCardInfo });
 }
 
 async function deleteAccount(id) {
     try {
-        if (!currentUser) return false;
+        const response = await api(`accounts/${id}`, 'DELETE');
         
-        sqliteDB.run('DELETE FROM accounts WHERE id = ? AND user_id = ?', [id, currentUser.id]);
-        saveDatabase();
-        
-        await renderAccounts();
-        await updateDashboardCards();
-        await updateCashFlowChart();
-        await updateExpensesChart();
-        return true;
+        if (response.success) {
+            // Atualizar a interface
+            await renderAccounts();
+            await updateDashboardCards();
+            await updateCashFlowChart();
+            await updateExpensesChart();
+            return true;
+        } else {
+            alert(response.message || 'Erro ao excluir conta');
+            return false;
+        }
     } catch (error) {
         console.error('Erro ao excluir conta:', error);
+        alert('Erro ao excluir conta. Tente novamente.');
         return false;
     }
 }
 
 // Funções de transação
 async function createTransaction(accountId, type, amount, category, date, description = '', tags = '') {
-    try {
-        if (!currentUser) return false;
-        
-        // Verifica se a conta pertence ao usuário
-        const stmt = sqliteDB.prepare('SELECT id FROM accounts WHERE id = ? AND user_id = ?');
-        const account = stmt.getAsObject([accountId, currentUser.id]);
-        stmt.free();
-        
-        if (!account.id) return false;
-        
-        sqliteDB.run(`
-            INSERT INTO transactions (account_id, type, amount, category, date, description, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [accountId, type, amount, category, date, description, tags]);
-        
-        // Atualiza o saldo da conta
-        const balanceChange = type === 'expense' ? -amount : amount;
-        sqliteDB.run(`
-            UPDATE accounts 
-            SET balance = balance + ? 
-            WHERE id = ?
-        `, [balanceChange, accountId]);
-        
-        saveDatabase();
-        return true;
-    } catch (error) {
-        console.error('Erro ao criar transação:', error);
-        return false;
-    }
+    return await api('transactions', 'POST', {
+        account_id: accountId,
+        type,
+        amount,
+        category,
+        date,
+        description,
+        tags
+    });
 }
 
 async function getTransactions(filters = {}) {
-    try {
-        if (!currentUser) return [];
-        
-        let query = `
-            SELECT t.*, a.name as account_name 
-            FROM transactions t
-            JOIN accounts a ON t.account_id = a.id
-            WHERE a.user_id = ?
-        `;
-        
-        const params = [currentUser.id];
-        
-        if (filters.startDate) {
-            query += ' AND t.date >= ?';
-            params.push(filters.startDate);
-        }
-        
-        if (filters.endDate) {
-            query += ' AND t.date <= ?';
-            params.push(filters.endDate);
-        }
-        
-        if (filters.type) {
-            query += ' AND t.type = ?';
-            params.push(filters.type);
-        }
-        
-        if (filters.category) {
-            query += ' AND t.category = ?';
-            params.push(filters.category);
-        }
-        
-        query += ' ORDER BY t.date DESC';
-        
-        const stmt = sqliteDB.prepare(query);
-        const transactions = [];
-        
-        while (stmt.step()) {
-            const row = stmt.getAsObject();
-            transactions.push(row);
-        }
-        stmt.free();
-        
-        return transactions;
-    } catch (error) {
-        console.error('Erro ao buscar transações:', error);
-        return [];
-    }
+    const queryParams = new URLSearchParams(filters).toString();
+    const response = await api(`transactions?${queryParams}`);
+    return response.success ? response.data : [];
 }
 
 // Funções de orçamento
@@ -996,14 +694,14 @@ function setupAccountModal() {
                 result = await createAccount(name, type, balance, color, icon, creditCardInfo);
             }
             
-            if (result) {
+            if (result.success) {
                 closeModal();
                 await renderAccounts();
                 await updateDashboardCards();
                 await updateCashFlowChart();
                 await updateExpensesChart();
             } else {
-                alert('Erro ao salvar conta');
+                alert(result.message || 'Erro ao salvar conta');
             }
         } catch (error) {
             console.error('Erro ao salvar conta:', error);
@@ -1157,36 +855,49 @@ function setupGoalModal() {
 function setupLogin() {
     const form = document.getElementById('login-form');
     const errorMessage = document.getElementById('login-error');
+    const loginButton = form.querySelector('.login-button');
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        const email = document.getElementById('email').value;
+        // Desabilitar o botão durante o login
+        loginButton.disabled = true;
+        loginButton.innerHTML = '<span>Entrando...</span>';
+        errorMessage.style.display = 'none';
+        
+        const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
         
         const success = await login(email, password);
         
-        if (success) {
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'flex';
-            updateDashboardOverview();
-        } else {
-            errorMessage.style.display = 'block';
-            errorMessage.textContent = 'Email ou senha inválidos';
+        // Restaurar o botão
+        loginButton.disabled = false;
+        loginButton.innerHTML = '<span>Acessar</span>';
+        
+        if (!success) {
+            // Vibrar em dispositivos móveis
+            if ('vibrate' in navigator) {
+                navigator.vibrate(200);
+            }
+            
+            // Focar no campo com erro
+            if (errorMessage.textContent.includes('email')) {
+                document.getElementById('email').focus();
+            } else if (errorMessage.textContent.includes('senha')) {
+                document.getElementById('password').focus();
+            }
         }
     });
     
-    // Toggle password visibility
-    const togglePassword = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('password');
-    const showIcon = togglePassword.querySelector('.show-password');
-    const hideIcon = togglePassword.querySelector('.hide-password');
-    
-    togglePassword.addEventListener('click', () => {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        showIcon.style.display = type === 'password' ? 'block' : 'none';
-        hideIcon.style.display = type === 'password' ? 'none' : 'block';
+    // Melhorar experiência do teclado virtual
+    const inputs = form.querySelectorAll('input');
+    inputs.forEach(input => {
+        input.addEventListener('focus', () => {
+            // Scroll suave para o campo em foco
+            setTimeout(() => {
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+        });
     });
 }
 
@@ -1209,7 +920,6 @@ function setupRegisterModal() {
     
     registerBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        console.log('Botão de registro clicado');
         modal.style.display = 'flex';
         modal.classList.add('active');
     });
@@ -1232,39 +942,25 @@ function setupRegisterModal() {
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        console.log('Formulário de registro submetido');
         
         const email = document.getElementById('register-email').value;
         const password = document.getElementById('register-password').value;
         const confirmPassword = document.getElementById('register-password-confirm').value;
         
-        console.log('Dados do formulário:', { email, passwordLength: password.length });
-        
-        errorMessage.style.display = 'none';
-        
         if (password !== confirmPassword) {
-            console.log('Senhas não coincidem');
             errorMessage.textContent = 'As senhas não coincidem';
             errorMessage.style.display = 'block';
             return;
         }
         
-        if (password.length < 6) {
-            console.log('Senha muito curta');
-            errorMessage.textContent = 'A senha deve ter pelo menos 6 caracteres';
-            errorMessage.style.display = 'block';
-            return;
-        }
+        const success = await register(email, password);
         
-        try {
-            const success = await register(email, password);
-            console.log('Resultado do registro:', { success });
-            
-            if (success) {
-                closeModal();
-            }
-        } catch (error) {
-            console.error('Erro ao tentar registrar:', error);
+        if (success) {
+            closeModal();
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'flex';
+            updateDashboardOverview();
+        } else {
             errorMessage.textContent = 'Erro ao criar conta. Tente novamente.';
             errorMessage.style.display = 'block';
         }
@@ -1370,26 +1066,33 @@ function setupNewButton() {
 
 // Inicialização
 async function init() {
-    await initSQLite();
     setupTheme();
     setupLogin();
     setupRegisterModal();
     setupDashboardNavigation();
-    setupNewButton();
     setupAccountModal();
     setupTransactionModal();
     setupBudgetModal();
     setupGoalModal();
+    setupNewButton();
     
-    // Configurar botão de logout
-    document.getElementById('logout').addEventListener('click', logout);
-    
-    // Verifica se há um token salvo
+    // Verificar se já está logado
     if (token) {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'flex';
         updateDashboardOverview();
     }
+    
+    // Configurar logout
+    document.getElementById('logout').addEventListener('click', logout);
+    
+    // Fechar menus de contexto ao clicar fora
+    document.addEventListener('click', (e) => {
+        const contextMenu = document.querySelector('.context-menu');
+        if (contextMenu && !contextMenu.contains(e.target)) {
+            contextMenu.remove();
+        }
+    });
 }
 
 // Iniciar aplicação
