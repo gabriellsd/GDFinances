@@ -996,14 +996,14 @@ function setupAccountModal() {
                 result = await createAccount(name, type, balance, color, icon, creditCardInfo);
             }
             
-            if (result.success) {
+            if (result) {
                 closeModal();
                 await renderAccounts();
                 await updateDashboardCards();
                 await updateCashFlowChart();
                 await updateExpensesChart();
             } else {
-                alert(result.message || 'Erro ao salvar conta');
+                alert('Erro ao salvar conta');
             }
         } catch (error) {
             console.error('Erro ao salvar conta:', error);
