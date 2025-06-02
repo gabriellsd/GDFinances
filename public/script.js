@@ -986,6 +986,228 @@ function setupRegisterModal() {
     });
 }
 
+// Configuração de scroll horizontal do menu mobile
+function setupMobileNavigation() {
+    if (window.innerWidth <= 768) {
+        const navUl = document.querySelector('.sidebar-nav ul');
+        const nav = document.querySelector('.sidebar-nav');
+        
+        if (!navUl || !nav) return;
+        
+        // Adicionar indicadores de scroll
+        addScrollIndicators();
+        
+        // Configurar eventos de scroll
+        navUl.addEventListener('scroll', updateScrollIndicators);
+        
+        // Configurar touch/swipe
+        setupTouchSwipe(navUl);
+        
+        // Configurar snap scrolling
+        setupSnapScrolling(navUl);
+        
+        // Atualizar indicadores inicialmente
+        updateScrollIndicators();
+    }
+}
+
+function addScrollIndicators() {
+    const nav = document.querySelector('.sidebar-nav');
+    if (!nav) return;
+    
+    // Remover indicadores existentes
+    document.querySelectorAll('.scroll-indicator').forEach(el => el.remove());
+    
+    // Criar indicadores
+    const leftIndicator = document.createElement('div');
+    leftIndicator.className = 'scroll-indicator left';
+    leftIndicator.innerHTML = '‹';
+    
+    const rightIndicator = document.createElement('div');
+    rightIndicator.className = 'scroll-indicator right';
+    rightIndicator.innerHTML = '›';
+    
+    nav.appendChild(leftIndicator);
+    nav.appendChild(rightIndicator);
+}
+
+function updateScrollIndicators() {
+    const navUl = document.querySelector('.sidebar-nav ul');
+    const nav = document.querySelector('.sidebar-nav');
+    const leftIndicator = document.querySelector('.scroll-indicator.left');
+    const rightIndicator = document.querySelector('.scroll-indicator.right');
+    
+    if (!navUl || !nav || !leftIndicator || !rightIndicator) return;
+    
+    const scrollLeft = navUl.scrollLeft;
+    const maxScroll = navUl.scrollWidth - navUl.clientWidth;
+    
+    // Atualizar classes do nav
+    nav.classList.toggle('scrolled-start', scrollLeft > 10);
+    nav.classList.toggle('scrolled-end', scrollLeft >= maxScroll - 10);
+    
+    // Atualizar indicadores
+    leftIndicator.classList.toggle('visible', scrollLeft > 10);
+    rightIndicator.classList.toggle('visible', scrollLeft < maxScroll - 10);
+}
+
+function setupTouchSwipe(navUl) {
+    let startX = 0;
+    let currentX = 0;
+    let startScrollLeft = 0;
+    let isDragging = false;
+    
+    navUl.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startScrollLeft = navUl.scrollLeft;
+        isDragging = true;
+        navUl.style.scrollBehavior = 'auto';
+    }, { passive: true });
+    
+    navUl.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        
+        currentX = e.touches[0].clientX;
+        const deltaX = startX - currentX;
+        navUl.scrollLeft = startScrollLeft + deltaX;
+        
+        // Prevenir scroll vertical
+        e.preventDefault();
+    }, { passive: false });
+    
+    navUl.addEventListener('touchend', () => {
+        isDragging = false;
+        navUl.style.scrollBehavior = 'smooth';
+        
+        // Snap to nearest item
+        snapToNearestItem(navUl);
+    }, { passive: true });
+}
+
+function setupSnapScrolling(navUl) {
+    // Adicionar mouse drag support para desktop
+    let isMouseDown = false;
+    let startX = 0;
+    let startScrollLeft = 0;
+    
+    navUl.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        startX = e.clientX;
+        startScrollLeft = navUl.scrollLeft;
+        navUl.style.cursor = 'grabbing';
+        navUl.style.scrollBehavior = 'auto';
+        e.preventDefault();
+    });
+    
+    navUl.addEventListener('mousemove', (e) => {
+        if (!isMouseDown) return;
+        
+        const deltaX = startX - e.clientX;
+        navUl.scrollLeft = startScrollLeft + deltaX;
+    });
+    
+    navUl.addEventListener('mouseup', () => {
+        isMouseDown = false;
+        navUl.style.cursor = 'grab';
+        navUl.style.scrollBehavior = 'smooth';
+        snapToNearestItem(navUl);
+    });
+    
+    navUl.addEventListener('mouseleave', () => {
+        isMouseDown = false;
+        navUl.style.cursor = 'grab';
+        navUl.style.scrollBehavior = 'smooth';
+    });
+}
+
+function snapToNearestItem(navUl) {
+    const items = navUl.querySelectorAll('li');
+    const scrollLeft = navUl.scrollLeft;
+    const itemWidth = items[0]?.offsetWidth || 70;
+    const gap = 5;
+    const totalItemWidth = itemWidth + gap;
+    
+    const targetIndex = Math.round(scrollLeft / totalItemWidth);
+    const targetScrollLeft = targetIndex * totalItemWidth;
+    
+    navUl.scrollTo({
+        left: targetScrollLeft,
+        behavior: 'smooth'
+    });
+}
+
+// Adicionar feedback haptic para dispositivos móveis
+function addHapticFeedback() {
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            // Vibração para feedback
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+            
+            // Animação de pulse
+            link.classList.add('pulse');
+            setTimeout(() => link.classList.remove('pulse'), 300);
+        });
+    });
+}
+
+// Otimizar scroll performance
+function optimizeScrollPerformance() {
+    const navUl = document.querySelector('.sidebar-nav ul');
+    if (!navUl) return;
+    
+    let scrollTimeout;
+    
+    navUl.addEventListener('scroll', () => {
+        // Debounce scroll events
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(updateScrollIndicators, 10);
+    }, { passive: true });
+}
+
+// Função para centralizar item ativo
+function centerActiveItem() {
+    const activeLink = document.querySelector('.sidebar-nav a.active');
+    const navUl = document.querySelector('.sidebar-nav ul');
+    
+    if (!activeLink || !navUl || window.innerWidth > 768) return;
+    
+    const activeLi = activeLink.closest('li');
+    const containerWidth = navUl.clientWidth;
+    const itemWidth = activeLi.offsetWidth;
+    const itemLeft = activeLi.offsetLeft;
+    
+    const scrollLeft = itemLeft - (containerWidth / 2) + (itemWidth / 2);
+    
+    navUl.scrollTo({
+        left: Math.max(0, scrollLeft),
+        behavior: 'smooth'
+    });
+}
+
+// Adicionar controles de navegação por teclado
+function setupKeyboardNavigation() {
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    
+    navLinks.forEach((link, index) => {
+        link.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' && index > 0) {
+                e.preventDefault();
+                navLinks[index - 1].focus();
+                centerActiveItem();
+            } else if (e.key === 'ArrowRight' && index < navLinks.length - 1) {
+                e.preventDefault();
+                navLinks[index + 1].focus();
+                centerActiveItem();
+            }
+        });
+    });
+}
+
+// Atualizar função setupDashboardNavigation
 function setupDashboardNavigation() {
     const navLinks = document.querySelectorAll('.sidebar-nav a');
     const sections = document.querySelectorAll('.dashboard-section');
@@ -1002,6 +1224,9 @@ function setupDashboardNavigation() {
             sections.forEach(section => {
                 section.style.display = section.id === targetSection ? 'block' : 'none';
             });
+            
+            // Centralizar item ativo em mobile
+            setTimeout(centerActiveItem, 100);
             
             // Atualizar conteúdo da seção
             switch (targetSection) {
@@ -1023,7 +1248,66 @@ function setupDashboardNavigation() {
             }
         });
     });
+    
+    // Configurar navegação mobile
+    setupMobileNavigation();
+    addHapticFeedback();
+    optimizeScrollPerformance();
+    setupKeyboardNavigation();
+    
+    // Centralizar item ativo inicialmente
+    setTimeout(centerActiveItem, 500);
 }
+
+// Detectar mudanças de orientação
+window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+        setupMobileNavigation();
+        centerActiveItem();
+    }, 100);
+});
+
+// Detectar redimensionamento
+window.addEventListener('resize', () => {
+    if (window.innerWidth <= 768) {
+        setupMobileNavigation();
+        centerActiveItem();
+    }
+});
+
+// Inicialização
+async function init() {
+    setupTheme();
+    setupLogin();
+    setupRegisterModal();
+    setupDashboardNavigation();
+    setupAccountModal();
+    setupTransactionModal();
+    setupBudgetModal();
+    setupGoalModal();
+    setupNewButton();
+    
+    // Verificar se já está logado
+    if (token) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        updateDashboardOverview();
+    }
+    
+    // Configurar logout
+    document.getElementById('logout').addEventListener('click', logout);
+    
+    // Fechar menus de contexto ao clicar fora
+    document.addEventListener('click', (e) => {
+        const contextMenu = document.querySelector('.context-menu');
+        if (contextMenu && !contextMenu.contains(e.target)) {
+            contextMenu.remove();
+        }
+    });
+}
+
+// Iniciar aplicação
+document.addEventListener('DOMContentLoaded', init);
 
 async function updateDashboardOverview() {
     await Promise.all([
@@ -1082,37 +1366,3 @@ function setupNewButton() {
         setTimeout(() => transactionModal.classList.add('active'), 10);
     });
 }
-
-// Inicialização
-async function init() {
-    setupTheme();
-    setupLogin();
-    setupRegisterModal();
-    setupDashboardNavigation();
-    setupAccountModal();
-    setupTransactionModal();
-    setupBudgetModal();
-    setupGoalModal();
-    setupNewButton();
-    
-    // Verificar se já está logado
-    if (token) {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboardOverview();
-    }
-    
-    // Configurar logout
-    document.getElementById('logout').addEventListener('click', logout);
-    
-    // Fechar menus de contexto ao clicar fora
-    document.addEventListener('click', (e) => {
-        const contextMenu = document.querySelector('.context-menu');
-        if (contextMenu && !contextMenu.contains(e.target)) {
-            contextMenu.remove();
-        }
-    });
-}
-
-// Iniciar aplicação
-document.addEventListener('DOMContentLoaded', init);

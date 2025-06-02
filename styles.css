@@ -403,7 +403,7 @@ body.light .input-icon input::placeholder {
     }
 
     .login-button {
-        height: 48px;
+        height: 50px;
         font-size: 16px;
     }
 
@@ -1501,13 +1501,17 @@ body.dark .moon-icon { display: block; }
 
 /* Responsividade Mobile */
 @media (max-width: 768px) {
-    /* Login */
+    #login-screen {
+        padding: 10px;
+        align-items: flex-start;
+    }
+
     .login-container {
         flex-direction: column;
         max-width: 100%;
-        margin: 10px;
         height: auto;
-        padding: 20px;
+        margin: 10px;
+        border-radius: 16px;
     }
 
     .login-illustration {
@@ -1519,7 +1523,36 @@ body.dark .moon-icon { display: block; }
         width: 100%;
     }
 
-    /* Dashboard */
+    .login-logo h1 {
+        font-size: 28px;
+    }
+
+    .login-logo p {
+        font-size: 14px;
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .input-icon input {
+        height: 48px;
+        font-size: 16px;
+        padding: 12px 16px 12px 48px;
+    }
+
+    .input-icon-svg {
+        width: 20px;
+        height: 20px;
+        left: 14px;
+    }
+
+    .login-button {
+        height: 50px;
+        font-size: 16px;
+    }
+
+    /* Dashboard Mobile */
     #dashboard {
         flex-direction: column;
         height: 100vh;
@@ -1533,234 +1566,301 @@ body.dark .moon-icon { display: block; }
         right: 0;
         top: auto;
         width: 100%;
-        height: 60px;
-        padding: 0;
+        height: 70px;
+        padding: 8px 0;
         z-index: 1000;
-        display: flex;
-        justify-content: space-around;
-        align-items: center;
-        backdrop-filter: blur(10px);
+        background: var(--bg-primary);
         border-top: 1px solid var(--border-color);
+        border-radius: 0;
+        box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.1);
     }
 
-    .sidebar-header, 
-    .sidebar-footer,
-    .new-button {
+    .sidebar-header,
+    .new-button,
+    .sidebar-footer {
         display: none;
     }
 
     .sidebar-nav {
+        padding: 0;
+        overflow: hidden;
         width: 100%;
-        margin: 0;
+        height: 100%;
     }
 
     .sidebar-nav ul {
         display: flex;
-        justify-content: space-around;
-        padding: 0;
+        align-items: center;
+        height: 100%;
         margin: 0;
-        width: 100%;
+        padding: 0 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-behavior: smooth;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE and Edge */
+        gap: 5px;
+    }
+
+    .sidebar-nav ul::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Opera */
     }
 
     .sidebar-nav li {
-        flex: 1;
+        flex: 0 0 auto;
+        scroll-snap-align: center;
+        min-width: 70px;
     }
 
     .sidebar-nav a {
-        padding: 8px 4px;
-        margin: 0;
         flex-direction: column;
-        font-size: 12px;
+        padding: 8px 6px;
+        min-height: auto;
+        font-size: 10px;
+        font-weight: 500;
         text-align: center;
-        gap: 4px;
-        border-radius: 0;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 70px;
     }
 
-    .nav-icon {
-        margin: 0;
-        width: 24px;
-        height: 24px;
+    .sidebar-nav .nav-icon {
+        width: 20px;
+        height: 20px;
+        margin-bottom: 2px;
+        margin-right: 0;
     }
 
+    .sidebar-nav a.active {
+        background: var(--primary-color);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .sidebar-nav a:hover {
+        background: var(--primary-light);
+        transform: translateY(-1px);
+    }
+
+    /* Indicadores de scroll */
+    .sidebar-nav::before,
+    .sidebar-nav::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 20px;
+        pointer-events: none;
+        z-index: 1;
+        transition: opacity 0.3s ease;
+    }
+
+    .sidebar-nav::before {
+        left: 0;
+        background: linear-gradient(to right, var(--bg-primary), transparent);
+        opacity: 0;
+    }
+
+    .sidebar-nav::after {
+        right: 0;
+        background: linear-gradient(to left, var(--bg-primary), transparent);
+        opacity: 1;
+    }
+
+    .sidebar-nav.scrolled-start::before {
+        opacity: 1;
+    }
+
+    .sidebar-nav.scrolled-end::after {
+        opacity: 0;
+    }
+
+    /* Conteúdo principal ajustado */
     .main-content {
-        margin-left: 0;
-        padding: 16px;
-        padding-bottom: 80px;
-        height: calc(100vh - 60px);
+        padding: 20px 16px 90px;
+        margin: 0;
+        width: 100%;
+        height: calc(100vh - 70px);
         overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
     }
 
-    /* Cards */
+    /* Cards responsivos */
     .dashboard-cards {
         grid-template-columns: 1fr;
-        gap: 16px;
-        padding: 0;
+        gap: 12px;
+        margin-bottom: 20px;
     }
 
     .card {
         padding: 16px;
-        margin: 0;
+        border-radius: 12px;
     }
 
-    /* Gráficos */
+    .card-header h3 {
+        font-size: 14px;
+    }
+
+    .balance,
+    .income,
+    .expense {
+        font-size: 20px;
+    }
+
+    /* Charts responsivos */
     .charts-grid {
         grid-template-columns: 1fr;
         gap: 16px;
-        padding: 0;
     }
 
     .chart-container {
         padding: 16px;
-        min-height: 300px;
+        border-radius: 12px;
     }
 
-    /* Contas */
+    /* Contas em mobile */
     .accounts-grid {
         grid-template-columns: 1fr;
-        gap: 16px;
-        padding: 0;
+        gap: 12px;
     }
 
-    .account-card {
+    .account-card,
+    .new-account-card {
         padding: 16px;
+        border-radius: 12px;
     }
 
-    /* Modal */
+    /* Modais em mobile */
     .modal-content {
-        width: 95%;
+        width: calc(100% - 20px);
+        max-width: none;
         margin: 10px;
-        max-height: 90vh;
+        max-height: calc(100vh - 40px);
+        border-radius: 16px;
+    }
+
+    .modal-header {
+        padding: 16px 20px;
+    }
+
+    .modal-body {
+        padding: 0 20px 20px;
+        max-height: calc(100vh - 180px);
         overflow-y: auto;
     }
 
-    /* Botão Nova Transação */
-    .new-transaction-button {
-        position: fixed;
-        bottom: 76px;
-        right: 16px;
-        z-index: 1001;
-        width: 56px;
-        height: 56px;
-        border-radius: 28px;
-        padding: 0;
+    .form-actions {
+        padding: 16px 20px;
+        gap: 12px;
+    }
+
+    .form-actions button {
+        flex: 1;
+        height: 48px;
+    }
+
+    /* Controles do header */
+    .header-controls {
+        padding: 10px 16px;
+        gap: 12px;
+    }
+
+    .theme-toggle {
+        width: 50px;
+        height: 26px;
+    }
+
+    .theme-slider {
+        width: 22px;
+        height: 22px;
+    }
+
+    /* Botões responsivos */
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger {
+        height: 44px;
+        padding: 0 16px;
+        font-size: 14px;
+    }
+
+    /* Safe area para dispositivos com notch */
+    .sidebar {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .main-content {
+        padding-bottom: calc(90px + env(safe-area-inset-bottom));
+    }
+
+    /* Touch feedback */
+    .sidebar-nav a:active {
+        transform: translateY(0) scale(0.95);
+        background: var(--primary-hover);
+    }
+
+    /* Animações otimizadas para mobile */
+    * {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    button,
+    .sidebar-nav a {
+        touch-action: manipulation;
+    }
+}
+
+/* Estilos para melhor indicação de scroll */
+@media (max-width: 768px) {
+    .sidebar-nav-wrapper {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .scroll-indicator {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 24px;
+        height: 24px;
+        background: var(--primary-color);
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        color: white;
+        font-size: 12px;
+        z-index: 2;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
     }
 
-    .new-transaction-button span {
-        display: none;
+    .scroll-indicator.left {
+        left: 5px;
     }
 
-    .new-transaction-button .nav-icon {
-        margin: 0;
-        width: 24px;
-        height: 24px;
+    .scroll-indicator.right {
+        right: 5px;
     }
 
-    /* Menu Dropdown */
-    .dropdown-menu {
-        bottom: 76px;
-        right: 16px;
-        top: auto;
-        left: auto;
-        transform-origin: bottom right;
-        width: auto;
-        min-width: 200px;
-    }
-
-    /* Header Controls */
-    .header-controls {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        padding: 12px 16px;
-        background: var(--bg-secondary);
-        border-bottom: 1px solid var(--border-color);
-        z-index: 999;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    /* Ajuste para o conteúdo principal considerando o header fixo */
-    .main-content {
-        margin-top: 60px;
-    }
-}
-
-/* Ajustes para telas muito pequenas */
-@media (max-width: 360px) {
-    .sidebar-nav a {
-        padding: 6px 2px;
-        font-size: 10px;
-    }
-
-    .nav-icon {
-        width: 20px;
-        height: 20px;
-    }
-
-    .modal-content {
-        width: 100%;
-        margin: 0;
-        border-radius: 0;
-    }
-
-    .header-controls {
-        padding: 8px 12px;
-    }
-}
-
-/* Melhorias de usabilidade para touch */
-@media (hover: none) {
-    /* Remover hover states em dispositivos touch */
-    .sidebar-nav a:hover,
-    .btn-primary:hover,
-    .account-card:hover,
-    .budget-card:hover,
-    .goal-card:hover {
-        transform: none;
-    }
-
-    /* Aumentar área de toque */
-    .sidebar-nav a,
-    .btn-primary,
-    .form-group input,
-    .modal-close,
-    .dropdown-item {
-        min-height: 44px;
-    }
-
-    /* Melhorar feedback de toque */
-    .sidebar-nav a:active,
-    .btn-primary:active,
-    .account-card:active {
+    .scroll-indicator.visible {
         opacity: 0.7;
-        transition: opacity 0.1s;
-    }
-}
-
-/* Safe areas para dispositivos modernos */
-@supports (padding: max(0px)) {
-    .sidebar {
-        padding-bottom: max(0px, env(safe-area-inset-bottom));
-        height: calc(60px + env(safe-area-inset-bottom));
     }
 
-    .main-content {
-        padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    /* Efeitos de vibração para feedback */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
     }
 
-    .new-transaction-button {
-        bottom: calc(76px + env(safe-area-inset-bottom));
-    }
-
-    .header-controls {
-        padding-top: max(12px, env(safe-area-inset-top));
+    .sidebar-nav a.pulse {
+        animation: pulse 0.3s ease;
     }
 }
 
