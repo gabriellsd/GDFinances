@@ -316,6 +316,7 @@ body.light .input-icon input::placeholder {
         max-width: 100%;
         margin: 10px;
         height: auto;
+        padding: 20px;
     }
 
     .login-illustration {
@@ -1400,6 +1401,7 @@ body.dark .moon-icon { display: block; }
         max-width: 100%;
         margin: 10px;
         height: auto;
+        padding: 20px;
     }
 
     .login-illustration {
@@ -1414,6 +1416,8 @@ body.dark .moon-icon { display: block; }
     /* Dashboard */
     #dashboard {
         flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
     }
 
     .sidebar {
@@ -1430,9 +1434,12 @@ body.dark .moon-icon { display: block; }
         justify-content: space-around;
         align-items: center;
         backdrop-filter: blur(10px);
+        border-top: 1px solid var(--border-color);
     }
 
-    .sidebar-header, .sidebar-footer {
+    .sidebar-header, 
+    .sidebar-footer,
+    .new-button {
         display: none;
     }
 
@@ -1446,50 +1453,71 @@ body.dark .moon-icon { display: block; }
         justify-content: space-around;
         padding: 0;
         margin: 0;
+        width: 100%;
+    }
+
+    .sidebar-nav li {
+        flex: 1;
     }
 
     .sidebar-nav a {
-        padding: 10px;
+        padding: 8px 4px;
+        margin: 0;
         flex-direction: column;
         font-size: 12px;
         text-align: center;
         gap: 4px;
+        border-radius: 0;
     }
 
     .nav-icon {
         margin: 0;
-        font-size: 20px;
+        width: 24px;
+        height: 24px;
     }
 
     .main-content {
         margin-left: 0;
-        padding: 20px;
+        padding: 16px;
         padding-bottom: 80px;
+        height: calc(100vh - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* Cards */
     .dashboard-cards {
         grid-template-columns: 1fr;
-        gap: 15px;
+        gap: 16px;
+        padding: 0;
     }
 
     .card {
-        padding: 15px;
+        padding: 16px;
+        margin: 0;
     }
 
     /* Gráficos */
     .charts-grid {
         grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 0;
     }
 
     .chart-container {
+        padding: 16px;
         min-height: 300px;
     }
 
     /* Contas */
     .accounts-grid {
         grid-template-columns: 1fr;
-        gap: 15px;
+        gap: 16px;
+        padding: 0;
+    }
+
+    .account-card {
+        padding: 16px;
     }
 
     /* Modal */
@@ -1497,17 +1525,15 @@ body.dark .moon-icon { display: block; }
         width: 95%;
         margin: 10px;
         max-height: 90vh;
+        overflow-y: auto;
     }
 
     /* Botão Nova Transação */
-    .new-button {
+    .new-transaction-button {
         position: fixed;
-        bottom: 70px;
-        right: 20px;
+        bottom: 76px;
+        right: 16px;
         z-index: 1001;
-    }
-
-    .new-button .btn-primary {
         width: 56px;
         height: 56px;
         border-radius: 28px;
@@ -1515,41 +1541,71 @@ body.dark .moon-icon { display: block; }
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
-    .new-button .btn-primary span {
+    .new-transaction-button span {
         display: none;
     }
 
-    .new-button .nav-icon {
+    .new-transaction-button .nav-icon {
         margin: 0;
-        font-size: 24px;
+        width: 24px;
+        height: 24px;
     }
 
     /* Menu Dropdown */
     .dropdown-menu {
-        bottom: 70px;
-        right: 20px;
+        bottom: 76px;
+        right: 16px;
         top: auto;
+        left: auto;
         transform-origin: bottom right;
+        width: auto;
+        min-width: 200px;
+    }
+
+    /* Header Controls */
+    .header-controls {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        z-index: 999;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* Ajuste para o conteúdo principal considerando o header fixo */
+    .main-content {
+        margin-top: 60px;
     }
 }
 
 /* Ajustes para telas muito pequenas */
 @media (max-width: 360px) {
     .sidebar-nav a {
-        padding: 8px;
+        padding: 6px 2px;
         font-size: 10px;
     }
 
     .nav-icon {
-        font-size: 18px;
+        width: 20px;
+        height: 20px;
     }
 
     .modal-content {
         width: 100%;
         margin: 0;
         border-radius: 0;
+    }
+
+    .header-controls {
+        padding: 8px 12px;
     }
 }
 
@@ -1558,7 +1614,9 @@ body.dark .moon-icon { display: block; }
     /* Remover hover states em dispositivos touch */
     .sidebar-nav a:hover,
     .btn-primary:hover,
-    .account-card:hover {
+    .account-card:hover,
+    .budget-card:hover,
+    .goal-card:hover {
         transform: none;
     }
 
@@ -1566,7 +1624,8 @@ body.dark .moon-icon { display: block; }
     .sidebar-nav a,
     .btn-primary,
     .form-group input,
-    .modal-close {
+    .modal-close,
+    .dropdown-item {
         min-height: 44px;
     }
 
@@ -1577,12 +1636,6 @@ body.dark .moon-icon { display: block; }
         opacity: 0.7;
         transition: opacity 0.1s;
     }
-}
-
-/* Suporte a gestos */
-.swipeable {
-    touch-action: pan-y;
-    user-select: none;
 }
 
 /* Safe areas para dispositivos modernos */
@@ -1596,8 +1649,12 @@ body.dark .moon-icon { display: block; }
         padding-bottom: calc(80px + env(safe-area-inset-bottom));
     }
 
-    .new-button {
-        bottom: calc(70px + env(safe-area-inset-bottom));
+    .new-transaction-button {
+        bottom: calc(76px + env(safe-area-inset-bottom));
+    }
+
+    .header-controls {
+        padding-top: max(12px, env(safe-area-inset-top));
     }
 }
 
