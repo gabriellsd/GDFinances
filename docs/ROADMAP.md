@@ -51,8 +51,14 @@ Construção incremental para manter qualidade e consistência.
 - Insights automáticos
 - Sugestão de categoria / OCR (fase 2)
 
-## Etapa 9 — Polimento & deploy
-- Animações finais
-- Testes
-- Vercel + GitHub Actions
-- Monitoramento
+## Etapa 9 — Polimento & deploy ✅ (parcial)
+- [x] GitHub: https://github.com/gabriellsd/GDFinances
+- [x] Vercel: https://gdfinances.vercel.app
+- [x] CI GitHub Actions
+- [ ] Animações finais, testes, monitoramento
+
+## Continuidade
+
+Documento completo do que foi feito e do que falta:
+
+→ **[docs/CONTINUIDADE.md](./CONTINUIDADE.md)** (abrir no PC de casa)

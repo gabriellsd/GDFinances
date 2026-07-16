@@ -5,6 +5,7 @@ export const accountTypeLabels: Record<AccountType, string> = {
   savings: "Poupança",
   wallet: "Carteira",
   cash: "Dinheiro",
+  credit: "Cartão / crédito",
   investment: "Investimento",
   international: "Conta internacional",
 };

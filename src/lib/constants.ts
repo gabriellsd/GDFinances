@@ -12,6 +12,7 @@ export const accountTypes = [
   "savings",
   "wallet",
   "cash",
+  "credit",
   "investment",
   "international",
 ] as const;

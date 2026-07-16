@@ -173,9 +173,14 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={account.is_active ? "success" : "secondary"}>
-                    {account.is_active ? "Ativa" : "Inativa"}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant={account.is_active ? "success" : "secondary"}>
+                      {account.is_active ? "Ativa" : "Inativa"}
+                    </Badge>
+                    {account.type === "credit" ? (
+                      <Badge variant="warning">Crédito</Badge>
+                    ) : null}
+                  </div>
                 </div>
                 <p className="text-2xl font-semibold tracking-tight">
                   {formatCurrency(
@@ -307,7 +312,11 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="initial_balance">Saldo inicial</Label>
+              <Label htmlFor="initial_balance">
+                {form.type === "credit"
+                  ? "Limite / saldo inicial (negativo = dívida)"
+                  : "Saldo inicial"}
+              </Label>
               <Input
                 id="initial_balance"
                 type="number"
@@ -320,6 +329,12 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
                   })
                 }
               />
+              {form.type === "credit" ? (
+                <p className="text-xs text-muted-foreground">
+                  Ex.: saldo da fatura em aberto como valor negativo (−500), ou
+                  0 se estiver zerada.
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">

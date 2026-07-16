@@ -56,7 +56,9 @@ Sem as chaves no `.env.local`, o app continua em **modo preview**.
 
 ## Roadmap
 
-Veja [docs/ROADMAP.md](docs/ROADMAP.md). Próximo: Contas, Categorias e Transações.
+Veja [docs/ROADMAP.md](docs/ROADMAP.md).
+
+**Para retomar em outro PC:** leia [docs/CONTINUIDADE.md](docs/CONTINUIDADE.md) — status completo, links, checklist e próximos passos.
 
 ## Scripts
 

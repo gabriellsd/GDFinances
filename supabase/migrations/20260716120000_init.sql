@@ -13,6 +13,7 @@ do $$ begin
     'savings',
     'wallet',
     'cash',
+    'credit',
     'investment',
     'international'
   );
