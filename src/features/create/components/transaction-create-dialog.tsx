@@ -25,6 +25,8 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -51,6 +53,8 @@ import { formatCurrency, formatDate } from "@/utils/format";
 import {
   createTransaction,
   updateTransaction,
+  updateTransactionWithScope,
+  type TransactionEditScope,
 } from "@/features/transactions/actions";
 import { listAccounts } from "@/features/accounts/actions";
 import {
@@ -178,8 +182,17 @@ export function TransactionCreateDialog({
     ACCOUNT_COLORS[4]
   );
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const [editScope, setEditScope] =
+    useState<TransactionEditScope>("current");
+  const [pendingCreateAnother, setPendingCreateAnother] = useState(false);
 
   const isEditing = Boolean(transaction);
+  const isSeriesEdit = Boolean(
+    transaction &&
+      (transaction.is_recurring ||
+        (Number(transaction.installment_count ?? 0) >= 2))
+  );
   const accent =
     type === "expense"
       ? {
@@ -211,6 +224,7 @@ export function TransactionCreateDialog({
     setKeepOpenAfterSave(false);
     setQuickCategoryOpen(false);
     setNewCategoryName("");
+    setScopeOpen(false);
 
     void Promise.all([listAccounts(), listCategories()]).then(
       ([nextAccounts, nextCategories]) => {
@@ -390,26 +404,59 @@ export function TransactionCreateDialog({
       return;
     }
 
+    if (transaction && isSeriesEdit) {
+      setPendingCreateAnother(createAnother);
+      setEditScope("current");
+      setScopeOpen(true);
+      return;
+    }
+
+    runSave(createAnother, "current");
+  }
+
+  function confirmSeriesEdit() {
+    setScopeOpen(false);
+    runSave(pendingCreateAnother, editScope);
+  }
+
+  function runSave(createAnother: boolean, scope: TransactionEditScope) {
     setKeepOpenAfterSave(createAnother);
     startTransition(async () => {
       if (transaction) {
-        const result = await updateTransaction(transaction.id, {
+        const payload: TransactionInput = {
           ...form,
           type,
           category_id: form.category_id || null,
           payment_method: form.payment_method || null,
-          recurrence: form.recurrence === "installment" ? "once" : form.recurrence,
+          recurrence:
+            form.recurrence === "installment" ? "once" : form.recurrence,
           installment_count: null,
           installment_current: null,
-        });
+        };
+
+        const result =
+          isSeriesEdit || scope !== "current"
+            ? await updateTransactionWithScope(transaction.id, payload, scope)
+            : await updateTransaction(transaction.id, payload);
 
         if (result.error) {
           toast.error(result.error);
           return;
         }
 
+        const count =
+          result.data &&
+          typeof result.data === "object" &&
+          "count" in result.data
+            ? Number(result.data.count)
+            : 1;
+
         toast.success(
-          type === "income" ? "Receita atualizada" : "Despesa atualizada"
+          count > 1
+            ? `${count} lançamentos atualizados`
+            : type === "income"
+              ? "Receita atualizada"
+              : "Despesa atualizada"
         );
         router.refresh();
         onOpenChange(false);
@@ -459,6 +506,7 @@ export function TransactionCreateDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-xl">
         <DialogHeader className="border-b border-border/70 px-5 py-4">
@@ -1104,5 +1152,95 @@ export function TransactionCreateDialog({
         )}
       </DialogContent>
     </Dialog>
+
+    <Dialog open={scopeOpen} onOpenChange={setScopeOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Aplicar alteração em quais lançamentos?</DialogTitle>
+          <DialogDescription>
+            Este lançamento faz parte de uma série (fixa ou parcelada). Escolha
+            o alcance da edição.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2 py-1">
+          {(
+            [
+              {
+                value: "current" as const,
+                title: "Somente esta",
+                hint: "Altera só o lançamento atual",
+              },
+              {
+                value: "future" as const,
+                title: "Esta e as próximas",
+                hint: "Inclui os meses/parcelas seguintes",
+              },
+              {
+                value: "past" as const,
+                title: "Esta e as anteriores",
+                hint: "Inclui os meses/parcelas anteriores",
+              },
+              {
+                value: "all" as const,
+                title: "Todas da série",
+                hint: "Anteriores, atual e próximas",
+              },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setEditScope(option.value)}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition",
+                editScope === option.value
+                  ? "border-primary bg-primary/5"
+                  : "border-border/70 hover:bg-secondary/50"
+              )}
+            >
+              <span
+                className={cn(
+                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                  editScope === option.value
+                    ? "border-primary"
+                    : "border-muted-foreground/40"
+                )}
+              >
+                {editScope === option.value ? (
+                  <span className="h-2 w-2 rounded-full bg-primary" />
+                ) : null}
+              </span>
+              <span>
+                <span className="block text-sm font-medium">{option.title}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {option.hint}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setScopeOpen(false)}
+            disabled={pending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            onClick={confirmSeriesEdit}
+            disabled={pending}
+          >
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Confirmar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

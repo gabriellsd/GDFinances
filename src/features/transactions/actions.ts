@@ -358,23 +358,11 @@ export async function updateTransaction(
       return { error: "Transferências não podem ser editadas por aqui" };
     }
 
-    if (current.is_paid) {
-      await adjustAccountBalance(
-        supabase,
-        user.id,
-        current.account_id,
-        -signedAmount(
-          current.type as "income" | "expense",
-          Number(current.amount)
-        )
-      );
-    }
-
-    const isRecurring = values.recurrence === "fixed";
-
-    const { data, error } = await supabase
-      .from("transactions")
-      .update({
+    const result = await applySingleTransactionUpdate(
+      supabase,
+      user.id,
+      current,
+      {
         type: values.type,
         amount: values.amount,
         account_id: values.account_id,
@@ -384,45 +372,331 @@ export async function updateTransaction(
         notes: values.notes || null,
         payment_method: values.payment_method || null,
         is_paid: values.is_paid,
-        is_recurring: isRecurring,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .select("*")
-      .single();
-
-    if (error) {
-      // Tenta reverter o ajuste se o update falhou
-      if (current.is_paid) {
-        await adjustAccountBalance(
-          supabase,
-          user.id,
-          current.account_id,
-          signedAmount(
-            current.type as "income" | "expense",
-            Number(current.amount)
-          )
-        );
+        is_recurring: values.recurrence === "fixed",
       }
-      return { error: error.message };
-    }
+    );
 
-    if (values.is_paid) {
-      await adjustAccountBalance(
-        supabase,
-        user.id,
-        values.account_id,
-        signedAmount(values.type, values.amount)
-      );
+    if (result.error || !result.data) {
+      return { error: result.error ?? "Erro ao atualizar transação" };
     }
 
     await revalidateFinancePaths();
-    return { success: true, data: data as Transaction };
+    return { success: true, data: result.data };
   } catch (error) {
     return {
       error:
         error instanceof Error ? error.message : "Erro ao atualizar transação",
+    };
+  }
+}
+
+export type TransactionEditScope = "current" | "future" | "past" | "all";
+
+function stripInstallmentLabel(description: string | null | undefined) {
+  if (!description) return "";
+  return description.replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/i, "").trim();
+}
+
+function seriesFingerprint(tx: {
+  type: string;
+  account_id: string;
+  category_id: string | null;
+  amount: number | string;
+  description: string | null;
+}) {
+  return [
+    tx.type,
+    tx.account_id,
+    tx.category_id ?? "",
+    Number(tx.amount).toFixed(2),
+    (tx.description ?? "").trim().toLowerCase(),
+  ].join("|");
+}
+
+async function applySingleTransactionUpdate(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  userId: string,
+  current: {
+    id: string;
+    type: string;
+    amount: number | string;
+    account_id: string;
+    is_paid: boolean;
+  },
+  next: {
+    type: "income" | "expense";
+    amount: number;
+    account_id: string;
+    category_id: string | null;
+    date: string;
+    description: string | null;
+    notes: string | null;
+    payment_method: string | null;
+    is_paid: boolean;
+    is_recurring: boolean;
+    installment_count?: number | null;
+    installment_current?: number | null;
+  }
+): Promise<ActionResult<Transaction>> {
+  if (current.type === "transfer") {
+    return { error: "Transferências não podem ser editadas por aqui" };
+  }
+
+  if (current.is_paid) {
+    await adjustAccountBalance(
+      supabase,
+      userId,
+      current.account_id,
+      -signedAmount(
+        current.type as "income" | "expense",
+        Number(current.amount)
+      )
+    );
+  }
+
+  const payload: Record<string, unknown> = {
+    type: next.type,
+    amount: next.amount,
+    account_id: next.account_id,
+    category_id: next.category_id,
+    date: next.date,
+    description: next.description,
+    notes: next.notes,
+    payment_method: next.payment_method,
+    is_paid: next.is_paid,
+    is_recurring: next.is_recurring,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (next.installment_count !== undefined) {
+    payload.installment_count = next.installment_count;
+  }
+  if (next.installment_current !== undefined) {
+    payload.installment_current = next.installment_current;
+  }
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .update(payload)
+    .eq("id", current.id)
+    .eq("user_id", userId)
+    .select("*")
+    .single();
+
+  if (error) {
+    if (current.is_paid) {
+      await adjustAccountBalance(
+        supabase,
+        userId,
+        current.account_id,
+        signedAmount(
+          current.type as "income" | "expense",
+          Number(current.amount)
+        )
+      );
+    }
+    return { error: error.message };
+  }
+
+  if (next.is_paid) {
+    await adjustAccountBalance(
+      supabase,
+      userId,
+      next.account_id,
+      signedAmount(next.type, next.amount)
+    );
+  }
+
+  return { success: true, data: data as Transaction };
+}
+
+/**
+ * Edita uma ocorrência e, opcionalmente, as demais da série (fixa / parcelas).
+ */
+export async function updateTransactionWithScope(
+  id: string,
+  input: TransactionInput,
+  scope: TransactionEditScope
+): Promise<ActionResult<{ count: number }>> {
+  try {
+    const parsed = transactionSchema.safeParse({
+      ...input,
+      recurrence:
+        input.recurrence === "installment" ? "once" : input.recurrence ?? "once",
+      installment_count: null,
+      installment_current: null,
+    });
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+    }
+
+    const { supabase, user } = await requireUser();
+    const values = parsed.data;
+
+    const { data: current, error: currentError } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (currentError || !current) {
+      return { error: "Transação não encontrada" };
+    }
+
+    if (current.type === "transfer") {
+      return { error: "Transferências não podem ser editadas por aqui" };
+    }
+
+    const { data: allRows, error: listError } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("type", ["income", "expense"]);
+
+    if (listError) return { error: listError.message };
+
+    const installmentTotal = Number(current.installment_count ?? 0);
+    const isInstallmentSeries = installmentTotal >= 2;
+    const isFixedSeries = Boolean(current.is_recurring);
+
+    let series = [current];
+
+    if (isInstallmentSeries) {
+      const base = stripInstallmentLabel(current.description);
+      series = (allRows ?? []).filter(
+        (tx) =>
+          Number(tx.installment_count) === installmentTotal &&
+          tx.account_id === current.account_id &&
+          tx.type === current.type &&
+          stripInstallmentLabel(tx.description) === base
+      );
+    } else if (isFixedSeries) {
+      const fingerprint = seriesFingerprint(current);
+      series = (allRows ?? []).filter(
+        (tx) =>
+          tx.is_recurring &&
+          seriesFingerprint(tx) === fingerprint
+      );
+    }
+
+    const refDate = String(current.date).slice(0, 10);
+    const targets = series.filter((tx) => {
+      if (tx.id === current.id) return true;
+      const date = String(tx.date).slice(0, 10);
+      if (scope === "current") return false;
+      if (scope === "future") return date >= refDate;
+      if (scope === "past") return date <= refDate;
+      return true;
+    });
+
+    const baseDescription =
+      stripInstallmentLabel(values.description ?? "") ||
+      stripInstallmentLabel(current.description);
+
+    const keepRecurring =
+      scope === "current" ? false : isFixedSeries || values.recurrence === "fixed";
+
+    // Se "somente esta" numa série fixa e era o template, preserva a série.
+    if (scope === "current" && isFixedSeries) {
+      const fingerprint = seriesFingerprint(current);
+      const others = series.filter((tx) => tx.id !== current.id);
+      const earliest = [...series].sort((a, b) =>
+        String(a.date).localeCompare(String(b.date))
+      )[0];
+      const editingTemplate = earliest?.id === current.id;
+      const fingerprintChanged =
+        seriesFingerprint({
+          type: values.type,
+          account_id: values.account_id,
+          category_id: values.category_id || null,
+          amount: values.amount,
+          description: values.description?.trim() || null,
+        }) !== fingerprint;
+
+      if (editingTemplate && fingerprintChanged && others.length === 0) {
+        const base = new Date(`${String(current.date).slice(0, 10)}T12:00:00`);
+        base.setMonth(base.getMonth() + 1);
+        const day = Number(String(current.date).slice(8, 10)) || 1;
+        const lastDay = new Date(
+          base.getFullYear(),
+          base.getMonth() + 1,
+          0
+        ).getDate();
+        const stubDay = Math.min(day, lastDay);
+        const stubDate = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(stubDay).padStart(2, "0")}`;
+
+        await supabase.from("transactions").insert({
+          user_id: user.id,
+          type: current.type,
+          amount: current.amount,
+          account_id: current.account_id,
+          category_id: current.category_id,
+          date: stubDate,
+          description: current.description,
+          notes: current.notes,
+          payment_method: current.payment_method,
+          is_paid: false,
+          is_recurring: true,
+          installment_count: null,
+          installment_current: null,
+        });
+      }
+    }
+
+    let updated = 0;
+    for (const member of targets) {
+      const installmentCurrent = member.installment_current
+        ? Number(member.installment_current)
+        : null;
+      const description =
+        isInstallmentSeries && installmentCurrent && installmentTotal
+          ? baseDescription
+            ? `${baseDescription} (${installmentCurrent}/${installmentTotal})`
+            : `Parcela ${installmentCurrent}/${installmentTotal}`
+          : values.description?.trim() || null;
+
+      const isPrimary = member.id === current.id;
+      const result = await applySingleTransactionUpdate(
+        supabase,
+        user.id,
+        member,
+        {
+          type: values.type,
+          amount: values.amount,
+          account_id: values.account_id,
+          category_id: values.category_id || null,
+          date: isPrimary ? values.date : String(member.date).slice(0, 10),
+          description,
+          notes: values.notes || null,
+          payment_method: values.payment_method || null,
+          is_paid: isPrimary ? values.is_paid : Boolean(member.is_paid),
+          is_recurring: isPrimary
+            ? scope === "current"
+              ? false
+              : values.recurrence === "fixed" || isFixedSeries
+            : keepRecurring || Boolean(member.is_recurring),
+          installment_count: member.installment_count,
+          installment_current: member.installment_current,
+        }
+      );
+
+      if (result.error) {
+        return {
+          error: `Falha ao atualizar uma ocorrência: ${result.error}`,
+        };
+      }
+      updated += 1;
+    }
+
+    await revalidateFinancePaths();
+    return { success: true, data: { count: updated } };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Erro ao atualizar a série de lançamentos",
     };
   }
 }
