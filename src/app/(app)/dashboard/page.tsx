@@ -1,7 +1,7 @@
 import { getDashboardStats } from "@/features/transactions/actions";
-import { DashboardView } from "@/features/dashboard/components/dashboard-view";
+import { DashboardClient } from "@/features/dashboard/components/dashboard-client";
 
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
-  return <DashboardView stats={stats} />;
+  return <DashboardClient initialStats={stats} />;
 }

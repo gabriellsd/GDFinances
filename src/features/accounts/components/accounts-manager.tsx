@@ -1,15 +1,23 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Banknote,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   Dialog,
   DialogContent,
@@ -17,20 +25,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState } from "@/components/shared/empty-state";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { BankIcon } from "@/components/shared/bank-icon";
+import { MoneyAmount } from "@/components/shared/money-amount";
 import { accountTypes, currencies } from "@/lib/constants";
 import { accountTypeLabels, ACCOUNT_COLORS } from "@/lib/labels";
 import { BANK_OPTIONS, getBankBrandColor } from "@/lib/banks";
-import { formatCurrency } from "@/utils/format";
 import { cn } from "@/lib/utils";
+import { expandRecurringForMonth } from "@/lib/recurring-transactions";
+import { useUIStore } from "@/store/ui-store";
 import {
   createAccount,
   deleteAccount,
   updateAccount,
 } from "@/features/accounts/actions";
-import type { Account } from "@/types";
+import type { TransactionWithRelations } from "@/features/transactions/actions";
 import type { AccountInput } from "@/lib/validations/finance";
+import type { AccountWithCredit } from "@/types";
+import type { ReactNode } from "react";
+
+const cashAccountTypes = accountTypes.filter((type) => type !== "credit");
 
 const emptyForm: AccountInput = {
   name: "",
@@ -41,14 +61,74 @@ const emptyForm: AccountInput = {
   currency: "BRL",
   initial_balance: 0,
   is_active: true,
+  card_number: "",
+  credit_limit: null,
+  closing_day: null,
+  due_day: null,
+  used_amount: 0,
 };
 
-export function AccountsManager({ accounts }: { accounts: Account[] }) {
+export function AccountsManager({
+  accounts,
+  transactions = [],
+}: {
+  accounts: AccountWithCredit[];
+  transactions?: TransactionWithRelations[];
+}) {
   const router = useRouter();
+  const openCreateExpense = useUIStore((s) => s.openCreate);
+  const financeMonth = useUIStore((s) => s.financeMonth);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Account | null>(null);
+  const [editing, setEditing] = useState<AccountWithCredit | null>(null);
   const [form, setForm] = useState<AccountInput>(emptyForm);
   const [pending, startTransition] = useTransition();
+  const [pendingDelete, setPendingDelete] =
+    useState<AccountWithCredit | null>(null);
+
+  const cashAccounts = useMemo(
+    () => accounts.filter((account) => account.type !== "credit"),
+    [accounts]
+  );
+
+  const monthTx = useMemo(
+    () =>
+      expandRecurringForMonth(
+        transactions,
+        financeMonth.year,
+        financeMonth.month
+      ),
+    [transactions, financeMonth.year, financeMonth.month]
+  );
+
+  const accountViews = useMemo(() => {
+    return cashAccounts.map((account) => {
+      const current = Number(account.current_balance);
+      const pendingIncome = monthTx
+        .filter(
+          (tx) =>
+            tx.account_id === account.id &&
+            tx.type === "income" &&
+            !tx.is_paid
+        )
+        .reduce((sum, tx) => sum + Number(tx.amount), 0);
+      const pendingExpense = monthTx
+        .filter(
+          (tx) =>
+            tx.account_id === account.id &&
+            tx.type === "expense" &&
+            !tx.is_paid
+        )
+        .reduce((sum, tx) => sum + Number(tx.amount), 0);
+      const projected = current + pendingIncome - pendingExpense;
+      return { account, current, projected };
+    });
+  }, [cashAccounts, monthTx]);
+
+  const totalCurrent = accountViews.reduce((sum, view) => sum + view.current, 0);
+  const totalProjected = accountViews.reduce(
+    (sum, view) => sum + view.projected,
+    0
+  );
 
   function openCreate() {
     setEditing(null);
@@ -56,7 +136,11 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
     setOpen(true);
   }
 
-  function openEdit(account: Account) {
+  function openEdit(account: AccountWithCredit) {
+    if (account.type === "credit") {
+      toast.message("Cartões de crédito são gerenciados em Cartões.");
+      return;
+    }
     setEditing(account);
     setForm({
       name: account.name,
@@ -67,6 +151,11 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
       currency: account.currency,
       initial_balance: Number(account.initial_balance),
       is_active: account.is_active,
+      card_number: "",
+      credit_limit: null,
+      closing_day: null,
+      due_day: null,
+      used_amount: 0,
     });
     setOpen(true);
   }
@@ -95,6 +184,10 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (form.type === "credit") {
+      toast.error("Cadastre cartões em Cartões de crédito.");
+      return;
+    }
     startTransition(async () => {
       const result = editing
         ? await updateAccount(editing.id, form)
@@ -111,8 +204,9 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
     });
   }
 
-  function onDelete(account: Account) {
-    if (!confirm(`Excluir a conta "${account.name}"?`)) return;
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const account = pendingDelete;
     startTransition(async () => {
       const result = await deleteAccount(account.id);
       if (result.error) {
@@ -120,100 +214,151 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
         return;
       }
       toast.success("Conta excluída");
+      setPendingDelete(null);
       router.refresh();
     });
   }
-
-  const total = accounts.reduce(
-    (sum, account) => sum + Number(account.current_balance),
-    0
-  );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Contas</h1>
-          <p className="mt-1 text-muted-foreground">
-            Saldo total:{" "}
-            <span className="font-medium text-foreground">
-              {formatCurrency(total)}
-            </span>
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Contas</h1>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Nova conta
+        <Button
+          size="icon"
+          className="h-10 w-10 rounded-full"
+          onClick={openCreate}
+          aria-label="Nova conta"
+        >
+          <Plus className="h-5 w-5" />
         </Button>
       </div>
 
-      {accounts.length === 0 ? (
-        <EmptyState
-          title="Nenhuma conta ainda"
-          description="Cadastre sua primeira conta (Nubank, Inter, Itaú…) com o ícone oficial do banco."
-          actionLabel="Criar conta"
-          onAction={openCreate}
-        />
-      ) : (
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {accounts.map((account) => (
-            <Card key={account.id} className="overflow-hidden">
-              <CardContent className="p-5">
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={openCreate}
+            className="flex min-h-[320px] h-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card px-6 text-center shadow-soft transition hover:border-primary/50 hover:bg-primary/5"
+          >
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-primary">
+              <Plus className="h-7 w-7" />
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              Nova conta
+            </span>
+          </button>
+
+          {accountViews.map(({ account, current, projected }) => (
+            <Card
+              key={account.id}
+              className="min-h-[320px] h-full overflow-hidden border-border/70 shadow-soft"
+            >
+              <CardContent className="flex h-full flex-col p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <BankIcon
                       bank={account.icon}
                       bankName={account.bank_name}
                       size={40}
                     />
-                    <div>
-                      <p className="font-semibold">{account.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{account.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
                         {account.bank_name || accountTypeLabels[account.type]}
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge variant={account.is_active ? "success" : "secondary"}>
-                      {account.is_active ? "Ativa" : "Inativa"}
-                    </Badge>
-                    {account.type === "credit" ? (
-                      <Badge variant="warning">Crédito</Badge>
-                    ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        disabled={pending}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => openEdit(account)}>
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => setPendingDelete(account)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Saldo atual</p>
+                    <MoneyAmount
+                      value={current}
+                      currency={account.currency}
+                      tone="auto"
+                      className="text-xl tracking-tight"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Saldo previsto
+                    </p>
+                    <MoneyAmount
+                      value={projected}
+                      currency={account.currency}
+                      tone="auto"
+                      className="text-xl tracking-tight"
+                    />
                   </div>
                 </div>
-                <p className="text-2xl font-semibold tracking-tight">
-                  {formatCurrency(
-                    Number(account.current_balance),
-                    account.currency
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {accountTypeLabels[account.type]} · {account.currency}
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openEdit(account)}
+
+                <div className="mt-auto border-t border-border/70 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => openCreateExpense("expense")}
+                    className="w-full text-center text-xs font-bold uppercase tracking-wide text-primary hover:underline"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Editar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onDelete(account)}
-                    disabled={pending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                    Adicionar despesa
+                  </button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
-      )}
+
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+          <SummaryTile
+            icon={Wallet}
+            label="Saldo atual"
+            value={
+              <MoneyAmount
+                value={totalCurrent}
+                tone="auto"
+                className="text-lg"
+              />
+            }
+          />
+          <SummaryTile
+            icon={Banknote}
+            label="Saldo previsto"
+            value={
+              <MoneyAmount
+                value={totalProjected}
+                tone="auto"
+                className="text-lg"
+              />
+            }
+          />
+        </aside>
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -265,7 +410,7 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
                 id="name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ex.: Nubank principal"
+                placeholder="Ex.: Nubank Roxinho"
                 required
               />
             </div>
@@ -283,7 +428,7 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
                     })
                   }
                 >
-                  {accountTypes.map((type) => (
+                  {cashAccountTypes.map((type) => (
                     <option key={type} value={type}>
                       {accountTypeLabels[type]}
                     </option>
@@ -312,29 +457,16 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="initial_balance">
-                {form.type === "credit"
-                  ? "Limite / saldo inicial (negativo = dívida)"
-                  : "Saldo inicial"}
-              </Label>
-              <Input
+              <Label htmlFor="initial_balance">Saldo inicial</Label>
+              <CurrencyInput
                 id="initial_balance"
-                type="number"
-                step="0.01"
+                currency={form.currency}
                 value={form.initial_balance}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    initial_balance: Number(e.target.value),
-                  })
+                onValueChange={(value) =>
+                  setForm({ ...form, initial_balance: value })
                 }
+                placeholder="R$ 0,00"
               />
-              {form.type === "credit" ? (
-                <p className="text-xs text-muted-foreground">
-                  Ex.: saldo da fatura em aberto como valor negativo (−500), ou
-                  0 se estiver zerada.
-                </p>
-              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -371,6 +503,46 @@ export function AccountsManager({ accounts }: { accounts: Account[] }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(openState) => {
+          if (!openState) setPendingDelete(null);
+        }}
+        title="Excluir conta?"
+        description={
+          pendingDelete
+            ? `Tem certeza que deseja excluir "${pendingDelete.name}"? Esta ação não pode ser desfeita.`
+            : ""
+        }
+        confirmLabel="Excluir conta"
+        loading={pending}
+        onConfirm={confirmDelete}
+      />
+    </div>
+  );
+}
+
+function SummaryTile({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Wallet;
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-soft">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <div className="mt-1 text-sm font-semibold leading-snug text-foreground">
+          {value}
+        </div>
+      </div>
     </div>
   );
 }

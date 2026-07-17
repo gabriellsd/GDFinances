@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { signOut } from "@/features/auth/actions";
+import { cn } from "@/lib/utils";
 
 type HeaderUser = {
   email: string;
@@ -32,7 +34,7 @@ function getInitials(name: string) {
     .join("");
 }
 
-export function UserMenu() {
+export function UserMenu({ showLabel = false }: { showLabel?: boolean }) {
   const router = useRouter();
   const [user, setUser] = useState<HeaderUser | null>(null);
 
@@ -80,12 +82,26 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
-          <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-primary/10 text-primary">
+        <Button
+          variant="ghost"
+          className={cn(
+            "relative h-9 gap-2 rounded-full px-1.5",
+            showLabel && "pr-2"
+          )}
+        >
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-primary/15 text-sm font-semibold text-primary">
               {user?.initials ?? "GD"}
             </AvatarFallback>
           </Avatar>
+          {showLabel ? (
+            <>
+              <span className="hidden max-w-[120px] truncate text-sm font-medium md:inline">
+                {user?.name ?? "Conta"}
+              </span>
+              <ChevronDown className="hidden h-4 w-4 text-muted-foreground md:inline" />
+            </>
+          ) : null}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

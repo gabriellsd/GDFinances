@@ -1,90 +1,114 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import {
-  Bell,
-  Menu,
-  Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Search,
-  Sun,
-} from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Menu, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useUIStore } from "@/store/ui-store";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  financeMonthLabel,
+  MONTH_LABELS,
+  useUIStore,
+} from "@/store/ui-store";
 import { UserMenu } from "@/features/auth/components/user-menu";
+
+function buildMonthOptions(centerYear: number, centerMonth: number) {
+  const options: Array<{ year: number; month: number; label: string }> = [];
+  const center = new Date(centerYear, centerMonth, 1);
+
+  for (let offset = -6; offset <= 6; offset++) {
+    const date = new Date(center.getFullYear(), center.getMonth() + offset, 1);
+    options.push({
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      label: financeMonthLabel(date.getFullYear(), date.getMonth(), true),
+    });
+  }
+
+  return options;
+}
 
 export function AppHeader() {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
-  const setCommandOpen = useUIStore((s) => s.setCommandOpen);
+  const financeMonth = useUIStore((s) => s.financeMonth);
+  const setFinanceMonth = useUIStore((s) => s.setFinanceMonth);
+  const shiftFinanceMonth = useUIStore((s) => s.shiftFinanceMonth);
+
+  const label = MONTH_LABELS[financeMonth.month] ?? "";
+  const options = buildMonthOptions(financeMonth.year, financeMonth.month);
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-border/80 bg-background/80 px-4 backdrop-blur-xl lg:px-6">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="lg:hidden"
-        onClick={() => setMobileNavOpen(true)}
-        aria-label="Abrir menu"
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="hidden lg:inline-flex"
-        onClick={toggleSidebar}
-        aria-label={sidebarCollapsed ? "Expandir sidebar" : "Recolher sidebar"}
-      >
-        {sidebarCollapsed ? (
-          <PanelLeftOpen className="h-5 w-5" />
-        ) : (
-          <PanelLeftClose className="h-5 w-5" />
-        )}
-      </Button>
-
-      <button
-        type="button"
-        onClick={() => setCommandOpen(true)}
-        className="relative hidden max-w-md flex-1 md:block"
-      >
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          readOnly
-          placeholder="Pesquisar contas, transações, tags..."
-          className="cursor-pointer pl-9 pr-16"
-        />
-        <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          ⌘K
-        </kbd>
-      </button>
-
-      <div className="ml-auto flex items-center gap-1.5">
+    <header className="sticky top-0 z-40 grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-border/60 bg-background/90 px-4 backdrop-blur-xl lg:px-8">
+      <div className="flex items-center">
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden"
-          onClick={() => setCommandOpen(true)}
-          aria-label="Pesquisar"
+          className="lg:hidden"
+          onClick={() => setMobileNavOpen(true)}
+          aria-label="Abrir menu"
         >
-          <Search className="h-5 w-5" />
+          <Menu className="h-5 w-5" />
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => shiftFinanceMonth(-1)}
+          aria-label="Mês anterior"
+        >
+          <ChevronLeft className="h-4 w-4" />
         </Button>
 
-        <Button className="hidden sm:inline-flex" size="sm">
-          <Plus className="h-4 w-4" />
-          Nova
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex min-w-[120px] items-center justify-center gap-1.5 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium capitalize text-foreground shadow-soft transition hover:bg-secondary"
+            >
+              {label}
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="center" className="max-h-72 w-48 overflow-y-auto">
+            {options.map((option) => {
+              const active =
+                option.year === financeMonth.year &&
+                option.month === financeMonth.month;
+              return (
+                <DropdownMenuItem
+                  key={`${option.year}-${option.month}`}
+                  onSelect={() => setFinanceMonth(option.year, option.month)}
+                  className={active ? "bg-accent font-semibold text-primary" : ""}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        <Button variant="ghost" size="icon" aria-label="Notificações">
-          <Bell className="h-5 w-5" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => shiftFinanceMonth(1)}
+          aria-label="Próximo mês"
+        >
+          <ChevronRight className="h-4 w-4" />
         </Button>
+      </div>
 
+      <div className="flex items-center justify-end gap-1.5">
         <Button
           variant="ghost"
           size="icon"
@@ -102,7 +126,7 @@ export function AppHeader() {
           <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
 
-        <UserMenu />
+        <UserMenu showLabel />
       </div>
     </header>
   );

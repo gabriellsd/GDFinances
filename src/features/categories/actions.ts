@@ -44,6 +44,7 @@ export async function createCategory(
         color: parsed.data.color,
         icon: parsed.data.icon ?? null,
         monthly_limit: parsed.data.monthly_limit ?? null,
+        parent_id: parsed.data.parent_id ?? null,
       })
       .select("*")
       .single();
@@ -80,6 +81,7 @@ export async function updateCategory(
         color: parsed.data.color,
         icon: parsed.data.icon ?? null,
         monthly_limit: parsed.data.monthly_limit ?? null,
+        parent_id: parsed.data.parent_id ?? null,
       })
       .eq("id", id)
       .eq("user_id", user.id)

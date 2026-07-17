@@ -115,6 +115,7 @@ create table public.credit_cards (
   closing_day int not null check (closing_day between 1 and 31),
   due_day int not null check (due_day between 1 and 31),
   best_day int check (best_day between 1 and 31),
+  card_last_four text,
   created_at timestamptz not null default now()
 );
 

@@ -6,9 +6,17 @@ import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mobileNav } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useUIStore } from "@/store/ui-store";
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const openCreate = useUIStore((s) => s.openCreate);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/90 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
@@ -32,13 +40,31 @@ export function MobileBottomNav() {
         })}
 
         <div className="flex justify-center">
-          <Button
-            size="icon"
-            className="-mt-7 h-14 w-14 rounded-2xl shadow-soft"
-            aria-label="Nova movimentação"
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                className="-mt-7 h-14 w-14 rounded-2xl shadow-soft"
+                aria-label="Nova movimentação"
+              >
+                <Plus className="h-6 w-6" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top" className="mb-2 w-44">
+              <DropdownMenuItem onSelect={() => openCreate("income")}>
+                Receita
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openCreate("expense")}>
+                Despesa
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openCreate("account")}>
+                Conta
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openCreate("category")}>
+                Categoria
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {mobileNav.slice(2).map((item) => {

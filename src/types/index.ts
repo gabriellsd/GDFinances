@@ -42,6 +42,19 @@ export interface Account {
   updated_at: string;
 }
 
+export interface CreditCardSummary {
+  id: string;
+  credit_limit: number;
+  available_limit: number;
+  closing_day: number;
+  due_day: number;
+  card_last_four: string | null;
+}
+
+export type AccountWithCredit = Account & {
+  credit_card: CreditCardSummary | null;
+};
+
 export interface Category {
   id: string;
   user_id: string;

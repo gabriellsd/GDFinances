@@ -1,11 +1,27 @@
-﻿import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+﻿import {
+  listAccounts,
+  syncCashBalancesFromTransactions,
+  syncCreditBalancesFromTransactions,
+} from "@/features/accounts/actions";
+import { listTransactions } from "@/features/transactions/actions";
+import { CardsManager } from "@/features/credit-cards/components/cards-manager";
 
-export default function Page() {
+export default async function CardsPage() {
+  await Promise.all([
+    syncCashBalancesFromTransactions(),
+    syncCreditBalancesFromTransactions(),
+  ]);
+  const [accounts, transactions] = await Promise.all([
+    listAccounts(),
+    listTransactions(),
+  ]);
+  const cards = accounts.filter((account) => account.type === "credit");
+  const paymentAccounts = accounts.filter((account) => account.type !== "credit");
   return (
-    <FeaturePlaceholder
-      title="Cartões"
-      description="Limites, faturas, parcelas e histórico de compras."
-      stage="Etapa 6"
+    <CardsManager
+      cards={cards}
+      paymentAccounts={paymentAccounts}
+      transactions={transactions}
     />
   );
 }

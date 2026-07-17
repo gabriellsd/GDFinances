@@ -1,13 +1,13 @@
 # GDFinances — Continuidade do projeto
 
 **Documento para retomar o trabalho em outro PC (ex.: casa).**  
-Última atualização: 16/07/2026
+Última atualização: 17/07/2026
 
 ---
 
 ## O que é
 
-**GDFinances** (Gabriel Dias Finances) — app de gestão financeira pessoal, Web + PWA, com Supabase e visual premium.
+**GDFinances** (Gabriel Dias Finances) — app de gestão financeira pessoal, Web + PWA, com Supabase e visual premium (inspirado no Mobills).
 
 ---
 
@@ -71,50 +71,49 @@ Abra: http://localhost:3000
 - [x] Tema claro / escuro / sistema + paleta definida
 - [x] Layout: sidebar recolhível, header, bottom nav mobile
 - [x] Landing, login, register, PWA manifest, SEO básico
-- [x] Documentação Supabase para iniciantes (`docs/SUPABASE.md`)
-- [x] Script de reset SQL se a migration falhar (`supabase/RESET_BEFORE_INIT.sql`)
+- [x] Documentação Supabase (`docs/SUPABASE.md`)
+- [x] Menu lateral sem Metas / Investimentos / Assinaturas / Empréstimos (fora do escopo por enquanto)
 
 ### Banco (Supabase)
-- [x] Schema completo (contas, transações, categorias, cartões, metas, IA, etc.)
+- [x] Schema completo (contas, transações, categorias, cartões, etc.)
 - [x] RLS (cada usuário só vê os próprios dados)
-- [x] Trigger no cadastro: cria `profiles`, `settings`, categorias padrão e widgets
+- [x] Trigger no cadastro: `profiles`, `settings`, categorias padrão e widgets
+- [x] Tipo `credit` + campos de cartão (`card_last_four`, limite, fechamento, vencimento)
 - [x] Seeds de bancos BR e moedas
-- [x] Bucket Storage `attachments` (políticas prontas)
-- [x] Migration aplicada no projeto Supabase (tabelas visíveis no Table Editor)
+- [x] Bucket Storage `attachments`
 
 ### Autenticação
 - [x] Cadastro e login com e-mail/senha
 - [x] Logout no menu do usuário
 - [x] Callback OAuth `/auth/callback`
-- [x] Botão Google preparado (precisa ativar provider no Supabase se quiser usar)
-- [x] Middleware protege rotas quando as env do Supabase existem
-- [x] Conta de teste criada e login funcionando (local)
+- [x] Google preparado (ativar provider no Supabase se quiser)
+- [x] Middleware protege rotas com env do Supabase
 
 ### Core financeiro (dados reais)
-- [x] **Contas** — CRUD, saldo, logos reais de bancos BR
-- [x] Tipo de conta **Cartão / crédito** (código pronto; ver pendência SQL abaixo)
-- [x] **Categorias** — listar / criar / editar / excluir + filtros
-- [x] **Transações** — receita e despesa; atualiza saldo da conta
-- [x] **Dashboard** — saldo total, receitas/despesas do mês, contas e últimas movimentações reais
+- [x] **Contas** — CRUD cash, saldo atual / previsto, logos de bancos BR
+- [x] **Cartões** — página própria `/cards`, faturas abertas/fechadas, pagar fatura, limite
+- [x] **Categorias** — tabela estilo Mobills (Nome / Ícone / Cor / Ações), subcategorias
+- [x] **Transações** — receita/despesa, fixas, parcelas, editar, filtro de mês global no header
+- [x] **Dashboard** — mesmos números de Transações (saldo atual, previsto, receitas, despesas)
+- [x] Semântica de crédito: despesa no cartão nasce “na fatura”; paga → sai do em aberto e do saldo da conta
+- [x] Modal global **+** (criar conta / lançamento)
 
 ### Deploy
-- [x] Repo próprio no GitHub (não usa mais o monorepo PESSOAL)
-- [x] Deploy produção na Vercel: https://gdfinances.vercel.app
+- [x] Repo no GitHub
+- [x] Produção na Vercel: https://gdfinances.vercel.app
 - [x] Env vars Supabase na Vercel
-- [x] GitHub conectado à Vercel (CI/CD por push)
+- [x] CI/CD por push em `main`
 
 ---
 
 ## Atenção ao retomar (checklist rápido)
 
-### 1) SQL do tipo crédito (se ainda não rodou)
-No Supabase → SQL Editor:
+### 1) SQL do cartão de crédito (se ainda não rodou)
+No Supabase → SQL Editor, rode:
 
-```sql
-alter type public.account_type add value if not exists 'credit';
-```
+`supabase/migrations/20260717120000_credit_card_fields.sql`
 
-Arquivo: `supabase/migrations/20260716160000_add_credit_account_type.sql`
+(e/ou a migration do tipo `credit`, se o banco for antigo)
 
 ### 2) URLs de Auth no Supabase (login na Vercel)
 Authentication → URL Configuration:
@@ -126,22 +125,11 @@ Authentication → URL Configuration:
   - `http://localhost:3000/auth/callback`
   - `http://localhost:3000/**`
 
-### 3) Commits locais ainda não enviados (PC atual)
-No momento deste documento, estas mudanças podem estar **só no PC do trabalho**, não no GitHub:
-
-- Tipo de conta `credit` + label + UI
-- Migration `20260716160000_add_credit_account_type.sql`
-- Ajuste do `.gitignore` (`.env.example` versionável)
-
-**No PC de casa, depois de clonar**, confira se o tipo “Cartão / crédito” existe.  
-Se não existir, faça pull de um push novo ou copie essas alterações.
-
-Para publicar do PC que tiver as mudanças:
-
+### 3) Publicar mudanças locais
 ```bash
 git add -A
 git status   # confirme que .env.local NÃO aparece
-git commit -m "feat: allow credit account type with bank logos support"
+git commit -m "docs: atualiza roadmap e continuidade com status atual"
 git push origin main
 ```
 
@@ -150,26 +138,35 @@ git push origin main
 ## O que falta continuar (prioridade sugerida)
 
 ### Próximo imediato
-1. **Transferências entre contas** (histórico + ajuste de saldos)
-2. **Módulo Cartões** de verdade (limite, fechamento, vencimento, fatura) — hoje o tipo crédito na conta é só o começo
-3. **Parcelamentos** nas despesas
-4. Botão **+** global (receita / despesa / transferência / investimento) em modal
-5. **Command menu** (⌘K) de pesquisa global
+1. **Transferências entre contas** (tela dedicada + histórico + saldos)
+2. **Relatórios** (hoje placeholder) — gráficos, comparativos, exportação
+3. **Calendário** (hoje placeholder) — receitas, despesas, parcelas, faturas
+4. **Command menu (⌘K)**
 
 ### Depois
-6. Metas + contribuições  
-7. Assinaturas recorrentes  
-8. Empréstimos (peguei / emprestei)  
-9. Investimentos (CRUD + rentabilidade)  
-10. Calendário financeiro  
-11. Relatórios + exportação PDF/Excel/CSV  
-12. Perfil financeiro / score  
-13. Chat IA + insights automáticos  
-14. Importação OFX/CSV/Excel + OCR (fase avançada)  
-15. Widgets arrastáveis no dashboard  
-16. Testes automatizados + polimento de UX/animações  
+5. **IA Financeira** (hoje placeholder) — chat + insights  
+6. Importação OFX/CSV/Excel (+ OCR depois)  
+7. Widgets arrastáveis no dashboard  
+8. Skeletons / animações / testes automatizados  
+
+### Fora do menu (adiado)
+- Metas, Assinaturas, Empréstimos, Investimentos — rotas ainda existem como placeholder, mas não aparecem na navegação
 
 Detalhes por etapa: `docs/ROADMAP.md`
+
+---
+
+## Menu atual (sidebar)
+
+- Dashboard  
+- Contas  
+- Transações  
+- Cartões de crédito  
+- Categorias  
+- Relatórios  
+- Calendário  
+- IA Financeira  
+- Perfil / Configurações  
 
 ---
 
@@ -180,23 +177,25 @@ src/
   app/                 # rotas (auth + app + api)
   components/          # UI, layout, providers
   features/
-    accounts/          # contas + logos
-    auth/              # login/register/logout
+    accounts/          # contas cash
+    credit-cards/      # cartões + faturas
+    auth/
     categories/
+    create/            # modais globais (+)
     dashboard/
     transactions/
   lib/
-    supabase/          # client, server, middleware
-    banks.ts           # catálogo de bancos BR
-    vendor/bancos-brasil/  # SVGs dos logos
-  store/               # zustand (UI)
+    supabase/
+    banks.ts
+    category-icons.tsx
+    navigation.ts
+  store/               # zustand (UI + mês financeiro)
 supabase/
-  migrations/          # SQL do banco
-  RESET_BEFORE_INIT.sql
+  migrations/
 docs/
   SUPABASE.md
   ROADMAP.md
-  CONTINUIDADE.md      # este arquivo
+  CONTINUIDADE.md
 ```
 
 ---
@@ -209,16 +208,17 @@ docs/
 | `npm run build` | Build de produção |
 | `npm run lint` | ESLint |
 | `git push origin main` | Sobe código → Vercel redeploya |
-| `vercel --prod` | Deploy manual (se CLI logada) |
 
 ---
 
 ## Decisões de produto já tomadas
 
-- Nome: **GDFinances** (Gabriel Dias Finances)
-- UX: poucos cliques, modais, dados reais no dashboard
-- Auth: Supabase (e-mail primeiro; Google opcional)
-- Contas mostram **ícones reais** dos bancos brasileiros
+- Nome: **GDFinances**
+- UX: poucos cliques, modais, mês global no header
+- Contas cash ≠ Cartões de crédito (páginas separadas)
+- Despesa no crédito = fatura; pagar fatura zera o em aberto e desconta o saldo da conta
+- Dashboard e Transações usam as mesmas fórmulas de saldo / receitas / despesas
+- Sem Metas / Investimentos / Assinaturas / Empréstimos no menu por enquanto
 - Sem `.env` no Git; secrets só em `.env.local` e Vercel
 
 ---
@@ -227,15 +227,15 @@ docs/
 
 | Sintoma | O que checar |
 |---------|----------------|
-| `Invalid supabaseUrl` | URL no `.env.local` deve ser `https://....supabase.co` (não a chave) |
-| `type already exists` no SQL | Rodar `RESET_BEFORE_INIT.sql` e depois o init de novo |
-| Login ok no localhost, falha na Vercel | Redirect URLs no Supabase (seção acima) |
-| Não cria conta tipo crédito | Rodar o `ALTER TYPE ... 'credit'` |
+| `Invalid supabaseUrl` | URL no `.env.local` deve ser `https://....supabase.co` |
+| Login ok no localhost, falha na Vercel | Redirect URLs no Supabase |
+| Cartão / tipo crédito | Rodar migrations de `credit` + campos do cartão |
+| Saldo “não bate” | Sync: despesas de crédito **pagas** reduzem a conta; pendentes só entram no previsto |
 | Dashboard vazio | Criar conta → lançar transação |
 
 ---
 
 ## Resumo em uma frase
 
-**Base sólida no ar (GitHub + Vercel + Supabase + auth + contas/categorias/transações/dashboard).**  
-**Próximo foco natural: transferências e cartões de crédito completos.**
+**Core no ar: Contas, Transações, Cartões/faturas, Categorias e Dashboard reais.**  
+**Próximo foco: transferências → Relatórios → Calendário → IA.**
