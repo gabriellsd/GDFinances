@@ -94,14 +94,18 @@ export async function POST(request: NextRequest) {
 
     let response: Response;
     if (name === "get_financial_summary") {
-      response = await getSummary(new NextRequest(`${origin}/api/assistant/summary`, { headers }));
+      const result = await getSummary(new NextRequest(`${origin}/api/assistant/summary`, { headers }));
+      if (!result) return rpc(id, { content: [{ type: "text", text: "A consulta não retornou resposta." }], isError: true });
+      response = result;
     } else if (name === "list_financial_transactions") {
       const query = new URLSearchParams();
       for (const key of ["from", "to", "status", "type"] as const) {
         const value = args[key];
         if (typeof value === "string" && value.length > 0) query.set(key, value);
       }
-      response = await getTransactions(new NextRequest(`${origin}/api/assistant/transactions?${query.toString()}`, { headers }));
+      const result = await getTransactions(new NextRequest(`${origin}/api/assistant/transactions?${query.toString()}`, { headers }));
+      if (!result) return rpc(id, { content: [{ type: "text", text: "A consulta não retornou resposta." }], isError: true });
+      response = result;
     } else {
       return rpc(id, {
         content: [{ type: "text", text: "Ferramenta não encontrada." }],
