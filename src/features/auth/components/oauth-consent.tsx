@@ -33,7 +33,7 @@ export function OAuthConsent({ authorizationId }: { authorizationId: string }) {
       if (!active) return;
       if (requestError || !data) {
         setError(requestError?.message ?? "Solicitação OAuth inválida ou expirada.");
-      } else if ("redirect_url" in data) {
+      } else if (!("authorization_id" in data)) {
         window.location.replace(data.redirect_url);
         return;
       } else {
