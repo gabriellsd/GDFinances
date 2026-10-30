@@ -86,7 +86,7 @@ export async function listTransactions(): Promise<TransactionWithRelations[]> {
     supabase
       .from("transactions")
       .select(
-        "*, accounts(id, name, color, icon, bank_name, type), categories(id, name, color)"
+        "*, accounts!transactions_account_id_fkey(id, name, color, icon, bank_name, type), categories(id, name, color)"
       )
       .eq("user_id", user.id)
       .order("date", { ascending: false })
@@ -95,7 +95,7 @@ export async function listTransactions(): Promise<TransactionWithRelations[]> {
     supabase
       .from("transactions")
       .select(
-        "*, accounts(id, name, color, icon, bank_name, type), categories(id, name, color)"
+        "*, accounts!transactions_account_id_fkey(id, name, color, icon, bank_name, type), categories(id, name, color)"
       )
       .eq("user_id", user.id)
       .eq("is_recurring", true)
