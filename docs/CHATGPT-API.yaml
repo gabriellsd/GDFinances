@@ -1,47 +1,59 @@
 openapi: 3.1.0
 info:
   title: GDFinances Assistant API
-  version: 0.1.0
-  description: Endpoints de consulta financeira autenticados do GDFinances.
+  version: 0.2.0
+  description: Consultas financeiras autenticadas do GDFinances.
 servers:
   - url: https://gdfinances-git-feat-chatgpt-finance-api-gabriellsds-projects.vercel.app
 security:
-  - BearerAuth: []
+  - ApiKeyAuth: []
 paths:
   /api/assistant/summary:
     get:
       operationId: getFinancialSummary
-      summary: Consultar resumo do mês atual e do próximo mês
+      summary: Consultar resumo financeiro do mês atual e do próximo mês
       responses:
         "200":
           description: Contas, receitas, despesas pagas e pendentes dos períodos.
         "401":
-          description: Token Supabase ausente, inválido ou expirado.
+          description: Chave de API ausente ou inválida.
   /api/assistant/transactions:
     get:
       operationId: listFinancialTransactions
-      summary: Listar lançamentos financeiros
+      summary: Listar lançamentos financeiros por período, situação e tipo
       parameters:
         - in: query
           name: from
-          schema: { type: string, format: date }
+          description: Data inicial no formato AAAA-MM-DD.
+          schema:
+            type: string
+            format: date
         - in: query
           name: to
-          schema: { type: string, format: date }
+          description: Data final no formato AAAA-MM-DD.
+          schema:
+            type: string
+            format: date
         - in: query
           name: status
-          schema: { type: string, enum: [paid, pending] }
+          description: Filtrar por lançamentos pagos ou pendentes.
+          schema:
+            type: string
+            enum: [paid, pending]
         - in: query
           name: type
-          schema: { type: string, enum: [income, expense] }
+          description: Filtrar por receitas ou despesas.
+          schema:
+            type: string
+            enum: [income, expense]
       responses:
         "200":
           description: Lançamentos encontrados.
         "401":
-          description: Token Supabase ausente, inválido ou expirado.
+          description: Chave de API ausente ou inválida.
 components:
   securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: Supabase access token
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
