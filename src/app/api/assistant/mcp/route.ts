@@ -43,9 +43,16 @@ function toolResult(data: unknown) {
 export async function POST(request: NextRequest) {
   const context = await getAssistantContext(request);
   if ("response" in context) {
+    const resourceMetadata = `${new URL(request.url).origin}/api/assistant/mcp/oauth-protected-resource`;
     return NextResponse.json(
-      { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Não autorizado. Verifique X-API-Key." } },
-      { status: 401, headers: { "Cache-Control": "no-store" } },
+      { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Não autorizado. Faça login via OAuth." } },
+      {
+        status: 401,
+        headers: {
+          "Cache-Control": "no-store",
+          "WWW-Authenticate": `Bearer resource_metadata="${resourceMetadata}"`,
+        },
+      },
     );
   }
 
@@ -90,7 +97,11 @@ export async function POST(request: NextRequest) {
     const name = params.name;
     const args = (params.arguments ?? {}) as Record<string, unknown>;
     const origin = new URL(request.url).origin;
-    const headers = new Headers({ "X-API-Key": request.headers.get("x-api-key") ?? "" });
+    const headers = new Headers();
+    const authorization = request.headers.get("authorization");
+    const apiKey = request.headers.get("x-api-key");
+    if (authorization) headers.set("Authorization", authorization);
+    if (apiKey) headers.set("X-API-Key", apiKey);
 
     let response: Response;
     if (name === "get_financial_summary") {
