@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
 }
 export async function POST(request: NextRequest) {
   try {
+    if (request.headers.get("origin") !== request.nextUrl.origin) return page("Solicitação bloqueada", "<p>Origem inválida.</p>", 403);
     const uid = await userId();
     if (!uid) return page("Sessão expirada", "<p>Entre no GDFinances e tente novamente.</p>", 401);
     const form = await request.formData();
