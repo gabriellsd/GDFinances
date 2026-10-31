@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
         p_old_hash: hashToken(refresh),
         p_new_hash: hashToken(next),
         p_new_expires_at: new Date(Date.now() + REFRESH_TOKEN_TTL * 1000).toISOString(),
+        p_client_id: clientId,
+        p_resource: resource,
       });
       if (error) throw error;
       const rotated = Array.isArray(data) ? data[0] : data;
