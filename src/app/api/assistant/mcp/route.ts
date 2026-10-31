@@ -55,7 +55,7 @@ const tools = [
       additionalProperties: false,
     },
   },
-  ...analyticsTools.map(([name, description, report, filters]) => ({
+  ...analyticsTools.map(([name, description, , filters]) => ({
     name, description,
     inputSchema: { type: "object", properties: Object.fromEntries(filters.map((filter) => [filter, { type: "string", description: "Data AAAA-MM-DD." }])), additionalProperties: false },
   })),
