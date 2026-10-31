@@ -3,6 +3,7 @@ import { getAssistantContext } from "@/lib/assistant-api";
 import { GET as getSummary } from "../summary/route";
 import { GET as getTransactions } from "../transactions/route";
 import { GET as getResources } from "../resources/route";
+import { GET as getAnalytics } from "../analytics/route";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,16 @@ const resourceTools = [
   ["list_credit_card_transactions", "Lista compras vinculadas a cartões e faturas.", "credit_card_transactions", ["from", "to"]],
   ["list_goal_contributions", "Lista aportes realizados em metas.", "goal_contributions", ["from", "to"]],
   ["list_investment_movements", "Lista compras, vendas, dividendos e rendimentos de investimentos.", "investment_movements", ["from", "to", "type"]],
+] as const;
+
+
+const analyticsTools = [
+  ["get_monthly_cashflow", "Analisa receitas, despesas, valores pagos, pendências e saldo projetado por período.", "cashflow", ["from", "to"]],
+  ["get_spending_by_category", "Agrupa receitas e despesas por categoria e mostra onde o dinheiro está sendo gasto.", "category", ["from", "to"]],
+  ["get_recurring_expenses", "Lista despesas recorrentes no período.", "recurring", ["from", "to"]],
+  ["get_upcoming_payments", "Lista despesas pendentes com vencimento no período.", "upcoming", ["from", "to"]],
+  ["get_credit_card_overview", "Mostra cartões e faturas no período, com limites e vencimentos.", "cards", ["from", "to"]],
+  ["get_financial_health", "Consolida saldos, investimentos, metas, dívidas, receitas e despesas para avaliar a saúde financeira.", "health", ["from", "to"]],
 ] as const;
 
 const tools = [
@@ -44,6 +55,10 @@ const tools = [
       additionalProperties: false,
     },
   },
+  ...analyticsTools.map(([name, description, report, filters]) => ({
+    name, description,
+    inputSchema: { type: "object", properties: Object.fromEntries(filters.map((filter) => [filter, { type: "string", description: "Data AAAA-MM-DD." }])), additionalProperties: false },
+  })),
   ...resourceTools.map(([name, description, resource, filters]) => ({
     name,
     description,
@@ -142,6 +157,16 @@ export async function POST(request: NextRequest) {
       }
       response = await getTransactions(new NextRequest(`${origin}/api/assistant/transactions?${query.toString()}`, { headers }));
     } else {
+      const analyticsTool = analyticsTools.find(([toolName]) => toolName === name);
+      if (analyticsTool) {
+        const [, , report, filters] = analyticsTool;
+        const query = new URLSearchParams({ report });
+        for (const key of filters) {
+          const value = args[key];
+          if (typeof value === "string" && value.length > 0) query.set(key, value);
+        }
+        response = await getAnalytics(new NextRequest(`${origin}/api/assistant/analytics?${query.toString()}`, { headers }));
+      }
       const resourceTool = resourceTools.find(([toolName]) => toolName === name);
       if (resourceTool) {
         const [, , resource, filters] = resourceTool;
