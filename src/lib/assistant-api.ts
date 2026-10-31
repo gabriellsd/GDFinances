@@ -6,7 +6,7 @@ import { mcpResource, verifyAccessToken } from "@/lib/oauth-server";
 
 export async function getAssistantContext(request: NextRequest) {
   const authorization = request.headers.get("authorization");
-  const bearer = authorization?.match(/^Bearer\\s+(.+)$/i)?.[1];
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   const apiKey = request.headers.get("x-api-key") || (bearer?.startsWith("gdf_") ? bearer : null);
   const env = getSupabaseEnv();
   if (!env) return { response: NextResponse.json({ error: "Supabase não configurado." }, { status: 503 }) };
