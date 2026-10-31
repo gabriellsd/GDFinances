@@ -102,7 +102,9 @@ comment on table public.oauth_refresh_tokens is
 create or replace function public.rotate_oauth_refresh_token(
   p_old_hash text,
   p_new_hash text,
-  p_new_expires_at timestamptz
+  p_new_expires_at timestamptz,
+  p_client_id text,
+  p_resource text
 )
 returns table (
   status text,
@@ -125,6 +127,11 @@ begin
   for update;
 
   if not found then
+    return query select 'invalid'::text, null::uuid, null::text, null::text, null::text, null::uuid;
+    return;
+  end if;
+
+  if v_token.client_id <> p_client_id or v_token.resource <> p_resource then
     return query select 'invalid'::text, null::uuid, null::text, null::text, null::text, null::uuid;
     return;
   end if;
@@ -159,5 +166,5 @@ begin
 end;
 $$;
 
-revoke all on function public.rotate_oauth_refresh_token(text, text, timestamptz) from public, anon, authenticated;
-grant execute on function public.rotate_oauth_refresh_token(text, text, timestamptz) to service_role;
+revoke all on function public.rotate_oauth_refresh_token(text, text, timestamptz, text, text) from public, anon, authenticated;
+grant execute on function public.rotate_oauth_refresh_token(text, text, timestamptz, text, text) to service_role;
