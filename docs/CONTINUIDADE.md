@@ -439,3 +439,10 @@ Não trabalhar diretamente em `main`.
 ## Observação sobre configuração Vercel
 
 Durante a configuração, a proteção SSO do Preview foi contornada apenas para o alias Preview. Isso não desativa a autenticação Bearer/OAuth da API. Não alterar proteção ou configurações de Production sem necessidade e autorização.
+
+
+## Guia de conexão do plugin ChatGPT
+
+Foi criado `docs/GUIA_PLUGIN_CHATGPT.md`, com arquitetura, endpoint MCP, ferramentas, autenticação realmente encontrada no código, passos de conexão no ChatGPT para quando OAuth estiver pronto, testes e checklist de pendências.
+
+**Importante:** o servidor MCP e as ferramentas read-only estão implementados, mas a autenticação OAuth 2.1 compatível com MCP/ChatGPT ainda precisa ser implementada ou comprovada de ponta a ponta. A rota de metadados atual, isoladamente, não comprova esse fluxo. Não considerar o plugin pronto nem configurar acesso sem autenticação para dados financeiros reais.
