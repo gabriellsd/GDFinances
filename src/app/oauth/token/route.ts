@@ -48,5 +48,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ access_token: issueAccessToken({ userId: rotated.user_id, clientId, scope: rotated.token_scope, resource }), token_type: "Bearer", expires_in: 600, refresh_token: next, scope: rotated.token_scope }, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
     }
     return fail("unsupported_grant_type");
-  } catch { return fail("server_error", 500); }
+  } catch (error) {
+    console.error("OAuth token endpoint error:", error instanceof Error ? error.name + ": " + error.message : "Unknown error");
+    return fail("server_error", 500);
+  }
 }
