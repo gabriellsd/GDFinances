@@ -26,12 +26,14 @@ export async function getAssistantContext(request: NextRequest) {
   // OAuth access tokens are audience-bound to this MCP resource and carry finance:read only.
   if (bearer.split(".").length === 3) {
     const claims = verifyAccessToken(bearer, mcpResource());
-    const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!claims || !serviceRole) return { response: NextResponse.json({ error: "Token OAuth inválido, expirado ou sem configuração." }, { status: 401 }) };
-    const supabase = createSupabaseClient(env.url, serviceRole, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-    return { supabase, user: { id: claims.sub }, oauth: true };
+    if (claims) {
+      const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceRole) return { response: NextResponse.json({ error: "OAuth não configurado no servidor." }, { status: 503 }) };
+      const supabase = createSupabaseClient(env.url, serviceRole, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      return { supabase, user: { id: claims.sub }, oauth: true };
+    }
   }
 
   const supabase = createSupabaseClient(env.url, env.key, {
