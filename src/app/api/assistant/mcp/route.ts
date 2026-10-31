@@ -148,14 +148,14 @@ export async function POST(request: NextRequest) {
 
     let response: Response | null = null;
     if (name === "get_financial_summary") {
-      response = await getSummary(new NextRequest(`${origin}/api/assistant/summary`, { headers }));
+      response = (await getSummary(new NextRequest(`${origin}/api/assistant/summary`, { headers }))) ?? NextResponse.json({ error: "Falha ao consultar resumo financeiro." }, { status: 500 });
     } else if (name === "list_financial_transactions") {
       const query = new URLSearchParams();
       for (const key of ["from", "to", "status", "type"] as const) {
         const value = args[key];
         if (typeof value === "string" && value.length > 0) query.set(key, value);
       }
-      response = await getTransactions(new NextRequest(`${origin}/api/assistant/transactions?${query.toString()}`, { headers }));
+      response = (await getTransactions(new NextRequest(`${origin}/api/assistant/transactions?${query.toString()}`, { headers }))) ?? NextResponse.json({ error: "Falha ao consultar lançamentos." }, { status: 500 });
     } else {
       const analyticsTool = analyticsTools.find(([toolName]) => toolName === name);
       if (analyticsTool) {
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
           const value = args[key];
           if (typeof value === "string" && value.length > 0) query.set(key, value);
         }
-        response = await getAnalytics(new NextRequest(`${origin}/api/assistant/analytics?${query.toString()}`, { headers }));
+        response = (await getAnalytics(new NextRequest(`${origin}/api/assistant/analytics?${query.toString()}`, { headers }))) ?? NextResponse.json({ error: "Falha ao gerar análise financeira." }, { status: 500 });
       }
       const resourceTool = resourceTools.find(([toolName]) => toolName === name);
       if (resourceTool) {
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
           const value = args[key];
           if (typeof value === "string" || typeof value === "boolean") query.set(key, String(value));
         }
-        response = await getResources(new NextRequest(`${origin}/api/assistant/resources?${query.toString()}`, { headers }));
+        response = (await getResources(new NextRequest(`${origin}/api/assistant/resources?${query.toString()}`, { headers }))) ?? NextResponse.json({ error: "Falha ao consultar recursos financeiros." }, { status: 500 });
       }
     }
 
