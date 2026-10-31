@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   const start = url.searchParams.get("from") || iso(defaultStart);
   const end = url.searchParams.get("to") || iso(defaultEnd);
 
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(start) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(end)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
     return NextResponse.json({ error: "Datas devem usar AAAA-MM-DD." }, { status: 400 });
   }
 
