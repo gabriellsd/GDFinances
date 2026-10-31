@@ -13,10 +13,16 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const report = url.searchParams.get("report");
   const today = new Date();
-  const start = url.searchParams.get("from") || iso(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)));
-  const end = url.searchParams.get("to") || iso(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0)));
+  const defaultStart = report === "upcoming"
+    ? new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1))
+    : new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const defaultEnd = report === "upcoming"
+    ? new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 2, 0))
+    : new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+  const start = url.searchParams.get("from") || iso(defaultStart);
+  const end = url.searchParams.get("to") || iso(defaultEnd);
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(start) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(end)) {
     return NextResponse.json({ error: "Datas devem usar AAAA-MM-DD." }, { status: 400 });
   }
 
