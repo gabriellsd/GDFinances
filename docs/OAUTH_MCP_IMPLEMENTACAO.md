@@ -1,61 +1,60 @@
-# OAuth 2.1 para GDFinances MCP — plano de implementação
+# OAuth 2.1 para GDFinances MCP
 
-Status: **fundação de banco preparada; fluxo OAuth ainda não está ativo**.
+Status: **implementação inicial commitada; depende de secrets e Supabase Preview isolado para build/runtime e testes de ponta a ponta. Não está liberada para produção.**
 
-## Segurança e escopo
+## O que foi implementado na branch
 
-- Preservar `assistant_api_keys` e `verify_assistant_api_key` sem alterações.
-- Manter o MCP read-only com o scope `finance:read`.
-- Não usar a chave `SUPABASE_SERVICE_ROLE_KEY` no browser.
-- As tabelas OAuth não devem ser acessíveis diretamente por `anon` ou `authenticated`; somente pelo backend.
-- Não executar migrations em Production durante desenvolvimento.
+- Migration `20261030090000_chatgpt_oauth_authorization_server.sql` com tabelas de clientes, códigos, consentimentos e refresh tokens.
+- RLS habilitado; tabelas OAuth sem acesso de `anon`/`authenticated`; acesso backend via `service_role`.
+- Função SQL `rotate_oauth_refresh_token` para rotação transacional e detecção de replay.
+- Discovery OAuth em `/.well-known/oauth-authorization-server`.
+- JWKS público em `/.well-known/jwks.json`.
+- Protected Resource Metadata em `/api/assistant/mcp/oauth-protected-resource`.
+- Registro dinâmico de clientes públicos em `/oauth/register`.
+- Authorization Code + PKCE S256 e consentimento autenticado em `/oauth/authorize`.
+- Troca de código e refresh em `/oauth/token`.
+- Revogação de refresh token em `/oauth/revoke`.
+- Access tokens RS256, audience-bound ao MCP, scope `finance:read`, TTL de 10 minutos.
+- MCP valida assinatura, issuer, audience, expiração e scope e mantém suporte à API Key existente e a sessões Supabase.
+- Rotas financeiras são chamadas com o usuário do token; o backend usa service-role somente após validar o JWT e as rotas de dados precisam filtrar explicitamente `user_id`.
 
-## Migration preparada
+## Secrets necessários (somente Vercel Preview)
 
-Arquivo: `supabase/migrations/20261030090000_chatgpt_oauth_authorization_server.sql`
+Configure estes valores como Environment Variables no ambiente **Preview**:
 
-Cria:
-- `oauth_clients`: clientes públicos e redirect URIs registrados.
-- `oauth_authorization_codes`: códigos de uso único armazenados como hash.
-- `oauth_consents`: consentimento explícito por usuário/cliente/escopo.
-- `oauth_refresh_tokens`: refresh tokens com hash, família e campos para rotação/revogação.
+- `SUPABASE_SERVICE_ROLE_KEY`: service role key do projeto Supabase de Preview isolado.
+- `OAUTH_ISSUER`: origem HTTPS estável do alias Preview, sem barra final, por exemplo `https://gdfinances-git-feat-chatgpt-finance-api-gabriellsds-projects.vercel.app`.
+- `OAUTH_JWT_KEY_ID`: identificador público da chave, por exemplo `gdfinances-preview-1`.
+- `OAUTH_JWT_PRIVATE_KEY`: chave RSA privada PEM (secret).
+- `OAUTH_JWT_PUBLIC_KEY`: chave RSA pública PEM correspondente.
 
-A migration habilita RLS e revoga privilégios de `anon` e `authenticated`, concedendo acesso apenas a `service_role`.
+Gere um par RSA dedicado para Preview. Não reutilize a chave de produção. Nunca coloque a chave privada em `NEXT_PUBLIC_*`, Git, chat ou browser. O código aceita PEM com quebras de linha escapadas como `\\n`.
 
-**A migration foi commitada na branch, mas não foi executada em nenhum banco.**
+## Migration / banco
 
-## Decisões do protocolo
+**Não execute a migration no projeto Supabase que aparece como `main — PRODUCTION`.** Primeiro crie ou selecione um projeto Supabase isolado para Preview e configure as variáveis Vercel Preview para esse projeto. Só então aplique a migration nesse banco de teste e valide as permissões.
 
-1. Authorization Code + PKCE obrigatório, somente `S256`.
-2. Clientes públicos: `token_endpoint_auth_method=none`.
-3. Redirect URI deve corresponder exatamente a uma URI registrada.
-4. O authorization code deve ser aleatório, curto, armazenado como SHA-256, expirar rapidamente e ser consumido uma única vez.
-5. Access token assinado pelo GDFinances, com `iss`, `aud` (resource MCP), `sub` (user UUID), `client_id`, `scope`, `iat`, `exp` e `jti`.
-6. O MCP deve validar assinatura, algoritmo permitido, issuer, audience, expiração e scope em toda chamada.
-7. Refresh token aleatório opaco, armazenado somente como SHA-256, rotacionado em cada uso. Reutilização de token já consumido deve revogar a família.
-8. Consentimento pode ser revogado pelo usuário.
-9. Nunca aceitar scope maior que `finance:read` nesta primeira versão.
+## Fluxo OAuth
 
-## Pendências antes de ativar
+1. MCP devolve 401 com URL de Protected Resource Metadata e scope `finance:read`.
+2. Cliente descobre o Authorization Server e registra um public client via DCR.
+3. Cliente inicia `/oauth/authorize` com `response_type=code`, `state`, `resource`, `code_challenge` e `code_challenge_method=S256`.
+4. Usuário autentica no GDFinances e aprova consentimento somente leitura.
+5. Authorization code aleatório, de uso único, armazenado como SHA-256, expira em 5 minutos.
+6. Cliente troca code + verifier + redirect URI + resource em `/oauth/token`.
+7. Access token RS256 dura 10 minutos; refresh token opaco é armazenado como hash e rotacionado.
+8. Reutilização de refresh token revoga a família por função SQL transacional.
+9. MCP valida o token antes de qualquer ferramenta financeira.
 
-- [ ] Criar/selecionar um projeto Supabase de Preview separado de Production.
-- [ ] Configurar as variáveis OAuth somente no ambiente Preview:
-  - `SUPABASE_SERVICE_ROLE_KEY`
-  - `OAUTH_ISSUER` (URL pública estável do GDFinances)
-  - `OAUTH_JWT_PRIVATE_KEY` (chave privada de assinatura, secret)
-  - `OAUTH_JWT_PUBLIC_KEY` (chave pública correspondente)
-  - `OAUTH_JWT_KEY_ID` (identificador da chave)
-- [ ] Implementar discovery do Authorization Server e Protected Resource Metadata com issuer/resource corretos.
-- [ ] Implementar registro dinâmico de clientes ou suporte explícito a Client ID Metadata Documents, conforme o fluxo exigido pelo cliente ChatGPT.
-- [ ] Implementar authorization endpoint, tela de login/consentimento, token endpoint, refresh e revogação.
-- [ ] Atualizar o MCP para aceitar tokens OAuth GDFinances e continuar aceitando API Keys existentes apenas se isso for intencional.
-- [ ] Adicionar JWKS público e rotação de chaves.
-- [ ] Testar PKCE, redirect URI maliciosa, state, code replay, refresh replay, expiração, revogação, escopo insuficiente e isolamento entre usuários.
-- [ ] Confirmar que chamadas MCP sem credencial continuam 401.
-- [ ] Testar tudo em Preview com dados fictícios antes de considerar qualquer ativação.
+## Limitações e verificações ainda obrigatórias
 
-## Atenção sobre ambiente
+- O endpoint anuncia DCR e não anuncia Client ID Metadata Documents (`client_id_metadata_document_supported=false`). Se o cliente MCP escolhido exigir CIMD, será necessário implementá-lo ou usar um cliente com DCR.
+- O login existente precisa preservar o parâmetro `next` para retornar ao consentimento após autenticação; testar esse fluxo no navegador. Se não preservar, ajustar a tela de login antes da conexão.
+- Adicionar rate limiting/WAF no endpoint público de DCR e endpoints OAuth.
+- Validar CSP/CSRF, callback de localhost do ChatGPT e redirects HTTPS em testes reais.
+- Confirmar no código de cada rota financeira que todas as queries com service-role filtram `user_id` explicitamente. Nunca confiar em RLS quando o service-role é usado.
+- Testar concorrência de refresh, replay, code replay, PKCE inválido, redirect mismatch, resource mismatch, token expirado, scope insuficiente e isolamento entre dois usuários.
+- Verificar que o framework expõe os caminhos `.well-known` no build/deployment.
+- Build/lint/typecheck e teste de integração ainda precisam ser executados após configurar secrets e banco Preview.
 
-O Preview da Vercel pode estar usando as mesmas variáveis Supabase de Production. Antes de executar a migration, confirmar que o Preview aponta para um projeto Supabase isolado. Não executar o SQL no projeto atualmente identificado como `main — PRODUCTION`.
-
-A migration é uma fundação de schema, não uma implementação OAuth pronta. Não conectar o ChatGPT nem divulgar a URL como integração autenticada até todos os itens acima estarem concluídos e testados.
+**Não conectar o ChatGPT nem considerar pronto para uso diário até completar esses testes. Não aplicar migrations, adicionar secrets ou fazer deploy de Production automaticamente.**
