@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         status: 401,
         headers: {
           "Cache-Control": "no-store",
-          "WWW-Authenticate": `Bearer resource_metadata="${resourceMetadata}"`,
+          "WWW-Authenticate": `Bearer resource_metadata="${resourceMetadata}", scope="finance:read"`,
         },
       },
     );
