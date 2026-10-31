@@ -73,13 +73,13 @@ export async function GET(request: NextRequest) {
       supabase.from("loans").select("direction,balance").eq("user_id", user.id),
       supabase.from("investments").select("amount").eq("user_id", user.id),
     ]);
-    const sum = (items: any[] | null, key: string) => (items ?? []).reduce((s, x) => s + money(x[key]), 0);
+    const sum = <T,>(items: T[] | null, getValue: (item: T) => unknown) => (items ?? []).reduce((total, item) => total + money(getValue(item)), 0);
     return NextResponse.json({
       report, period: { from: start, to: end },
-      accountBalances: sum(accounts, "current_balance"),
-      investmentValue: sum(investments, "amount"),
-      goalTarget: sum(goals, "target_amount"),
-      goalSaved: sum(goals, "current_amount"),
+      accountBalances: sum(accounts, item => item.current_balance),
+      investmentValue: sum(investments, item => item.amount),
+      goalTarget: sum(goals, item => item.target_amount),
+      goalSaved: sum(goals, item => item.current_amount),
       borrowedDebt: (loans ?? []).filter(x => x.direction === "borrowed").reduce((s,x) => s+money(x.balance),0),
       lentReceivable: (loans ?? []).filter(x => x.direction === "lent").reduce((s,x) => s+money(x.balance),0),
       income: (tx ?? []).filter(x => x.type === "income").reduce((s,x) => s+money(x.amount),0),
