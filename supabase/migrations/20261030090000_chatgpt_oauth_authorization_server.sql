@@ -96,3 +96,68 @@ comment on table public.oauth_consents is
   'Consentimentos explícitos por usuário, cliente e escopos concedidos.';
 comment on table public.oauth_refresh_tokens is
   'Refresh tokens rotativos, armazenados somente como SHA-256; reutilização revoga a família.';
+
+
+-- Rotação transacional: bloqueia a linha antiga e revoga a família em caso de replay.
+create or replace function public.rotate_oauth_refresh_token(
+  p_old_hash text,
+  p_new_hash text,
+  p_new_expires_at timestamptz
+)
+returns table (
+  status text,
+  user_id uuid,
+  client_id text,
+  token_scope text,
+  resource text,
+  family_id uuid
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_token public.oauth_refresh_tokens%rowtype;
+begin
+  select * into v_token
+  from public.oauth_refresh_tokens
+  where token_hash = p_old_hash
+  for update;
+
+  if not found then
+    return query select 'invalid'::text, null::uuid, null::text, null::text, null::text, null::uuid;
+    return;
+  end if;
+
+  if v_token.revoked_at is not null or v_token.expires_at <= now() then
+    return query select 'invalid'::text, null::uuid, null::text, null::text, null::text, null::uuid;
+    return;
+  end if;
+
+  if v_token.used_at is not null then
+    update public.oauth_refresh_tokens
+      set revoked_at = now()
+      where public.oauth_refresh_tokens.family_id = v_token.family_id
+        and public.oauth_refresh_tokens.revoked_at is null;
+    return query select 'replay'::text, null::uuid, null::text, null::text, null::text, v_token.family_id;
+    return;
+  end if;
+
+  update public.oauth_refresh_tokens
+    set used_at = now(), replaced_by_hash = p_new_hash
+    where id = v_token.id;
+
+  insert into public.oauth_refresh_tokens (
+    token_hash, family_id, user_id, client_id, scope, resource, expires_at
+  ) values (
+    p_new_hash, v_token.family_id, v_token.user_id, v_token.client_id,
+    v_token.scope, v_token.resource, p_new_expires_at
+  );
+
+  return query select 'rotated'::text, v_token.user_id, v_token.client_id,
+    v_token.scope, v_token.resource, v_token.family_id;
+end;
+$$;
+
+revoke all on function public.rotate_oauth_refresh_token(text, text, timestamptz) from public, anon, authenticated;
+grant execute on function public.rotate_oauth_refresh_token(text, text, timestamptz) to service_role;
