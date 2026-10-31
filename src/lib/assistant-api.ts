@@ -2,10 +2,11 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "@/lib/supabase/config";
+import { mcpResource, verifyAccessToken } from "@/lib/oauth-server";
 
 export async function getAssistantContext(request: NextRequest) {
   const authorization = request.headers.get("authorization");
-  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const bearer = authorization?.match(/^Bearer\\s+(.+)$/i)?.[1];
   const apiKey = request.headers.get("x-api-key") || (bearer?.startsWith("gdf_") ? bearer : null);
   const env = getSupabaseEnv();
   if (!env) return { response: NextResponse.json({ error: "Supabase não configurado." }, { status: 503 }) };
@@ -20,7 +21,19 @@ export async function getAssistantContext(request: NextRequest) {
     return { supabase, user: { id: userId } };
   }
 
-  if (!bearer) return { response: NextResponse.json({ error: "Bearer token ou X-API-Key obrigatório." }, { status: 401 }) };
+  if (!bearer) return { response: NextResponse.json({ error: "Bearer token obrigatório." }, { status: 401 }) };
+
+  // OAuth access tokens are audience-bound to this MCP resource and carry finance:read only.
+  if (bearer.split(".").length === 3) {
+    const claims = verifyAccessToken(bearer, mcpResource());
+    const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!claims || !serviceRole) return { response: NextResponse.json({ error: "Token OAuth inválido, expirado ou sem configuração." }, { status: 401 }) };
+    const supabase = createSupabaseClient(env.url, serviceRole, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    return { supabase, user: { id: claims.sub }, oauth: true };
+  }
+
   const supabase = createSupabaseClient(env.url, env.key, {
     global: { headers: { Authorization: `Bearer ${bearer}` } },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
