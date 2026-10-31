@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   }
 
   const config = resources[resource];
-  let query = context.supabase.from(config.table).select(config.select)
+  let query = context.supabase.from(config.table as string).select(config.select as string)
     .eq("user_id", context.user.id)
     .order(config.order, { ascending: true })
     .limit(500);
