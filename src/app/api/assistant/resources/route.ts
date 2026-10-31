@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   const to = url.searchParams.get("to");
   const status = url.searchParams.get("status");
   const type = url.searchParams.get("type");
-  if ((from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) || (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to))) {
+  if ((from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) || (to && !/^\d{4}-\d{2}-\d{2}$/.test(to))) {
     return NextResponse.json({ error: "Datas devem usar o formato AAAA-MM-DD." }, { status: 400 });
   }
   if (["credit_card_bills", "installments", "transfers", "credit_card_transactions", "goal_contributions", "investment_movements"].includes(resource)) {
