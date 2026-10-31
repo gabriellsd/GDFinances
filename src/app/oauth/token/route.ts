@@ -34,15 +34,16 @@ export async function POST(request: NextRequest) {
     if (grant === "refresh_token") {
       const refresh = String(form.get("refresh_token") || "");
       if (!refresh) return fail("invalid_grant");
-      const { data: old } = await admin.from("oauth_refresh_tokens").select("*").eq("token_hash", hashToken(refresh)).eq("client_id", clientId).eq("resource", resource).maybeSingle();
-      if (!old || old.revoked_at || Date.parse(old.expires_at) <= Date.now()) return fail("invalid_grant");
-      if (old.used_at) { await admin.from("oauth_refresh_tokens").update({ revoked_at: new Date().toISOString() }).eq("family_id", old.family_id); return fail("invalid_grant"); }
-      const { data: used } = await admin.from("oauth_refresh_tokens").update({ used_at: new Date().toISOString() }).eq("id", old.id).is("used_at", null).is("revoked_at", null).select("id").maybeSingle();
-      if (!used) return fail("invalid_grant");
       const next = randomToken(48);
-      const { error } = await admin.from("oauth_refresh_tokens").insert({ token_hash: hashToken(next), family_id: old.family_id, user_id: old.user_id, client_id: clientId, scope: old.scope, resource, expires_at: new Date(Date.now() + REFRESH_TOKEN_TTL * 1000).toISOString() });
+      const { data, error } = await admin.rpc("rotate_oauth_refresh_token", {
+        p_old_hash: hashToken(refresh),
+        p_new_hash: hashToken(next),
+        p_new_expires_at: new Date(Date.now() + REFRESH_TOKEN_TTL * 1000).toISOString(),
+      });
       if (error) throw error;
-      return NextResponse.json({ access_token: issueAccessToken({ userId: old.user_id, clientId, scope: old.scope, resource }), token_type: "Bearer", expires_in: 600, refresh_token: next, scope: old.scope }, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
+      const rotated = Array.isArray(data) ? data[0] : data;
+      if (!rotated || rotated.status !== "rotated" || rotated.client_id !== clientId || rotated.resource !== resource) return fail("invalid_grant");
+      return NextResponse.json({ access_token: issueAccessToken({ userId: rotated.user_id, clientId, scope: rotated.token_scope, resource }), token_type: "Bearer", expires_in: 600, refresh_token: next, scope: rotated.token_scope }, { headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
     }
     return fail("unsupported_grant_type");
   } catch { return fail("server_error", 500); }
