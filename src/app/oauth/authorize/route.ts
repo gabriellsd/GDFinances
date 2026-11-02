@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { oauthAdmin, randomToken, hashToken, AUTH_CODE_TTL, mcpResource, isSafeRedirectUri, OAUTH_SCOPE, OAUTH_SUPPORTED_SCOPES } from "@/lib/oauth-server";
+import { oauthAdmin, randomToken, hashToken, AUTH_CODE_TTL, mcpResource, isSafeRedirectUri, OAUTH_SCOPE, OAUTH_SUPPORTED_SCOPES, oauthIssuer } from "@/lib/oauth-server";
 export const dynamic = "force-dynamic";
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]!));
 function page(title: string, body: string, status = 200) {
@@ -52,14 +52,27 @@ export async function POST(request: NextRequest) {
     const { data: client } = await admin.from("oauth_clients").select("client_id,redirect_uris").eq("client_id", values.clientId).is("disabled_at", null).maybeSingle();
     if (!client || !client.redirect_uris.includes(values.redirect)) return page("Cliente não reconhecido", "<p>Cliente inválido.</p>", 400);
     const target = new URL(values.redirect);
-    if (form.get("decision") !== "approve") { target.searchParams.set("error","access_denied"); target.searchParams.set("state",values.state); target.searchParams.set("iss", new URL(request.url).origin); return NextResponse.redirect(target); }
+    const issuer = oauthIssuer();
+    if (form.get("decision") !== "approve") {
+      target.searchParams.set("error","access_denied");
+      target.searchParams.set("state",values.state);
+      target.searchParams.set("iss", issuer);
+      return NextResponse.redirect(target);
+    }
     const { error: consentError } = await admin.from("oauth_consents").upsert({ user_id: uid, client_id: values.clientId, scopes: values.scope.split(" "), granted_at: new Date().toISOString(), revoked_at: null }, { onConflict: "user_id,client_id" });
     if (consentError) throw consentError;
     const code = randomToken(32);
     const { error } = await admin.from("oauth_authorization_codes").insert({ code_hash: hashToken(code), client_id: values.clientId, user_id: uid, redirect_uri: values.redirect, scope: values.scope, code_challenge: values.challenge, code_challenge_method: "S256", resource: values.resource, expires_at: new Date(Date.now()+AUTH_CODE_TTL*1000).toISOString() });
     if (error) throw error;
-    target.searchParams.set("code",code); target.searchParams.set("state",values.state);
-    target.searchParams.set("iss", new URL(request.url).origin);
+    target.searchParams.set("code",code);
+    target.searchParams.set("state",values.state);
+    // RFC 9207 issuer identification must match the issuer advertised in server metadata,
+    // not the host serving this request (which may be a Vercel Preview deployment).
+    target.searchParams.set("iss", issuer);
+    console.info("OAuth authorization response issued", { issuerMatchesMetadata: true });
     return NextResponse.redirect(target);
-  } catch { return page("Falha na autorização", "<p>Não foi possível concluir a autorização. Tente novamente.</p>", 500); }
+  } catch (error) {
+    console.error("OAuth authorization response failed", { errorName: error instanceof Error ? error.name : "UnknownError" });
+    return page("Falha na autorização", "<p>Não foi possível concluir a autorização. Tente novamente.</p>", 500);
+  }
 }
