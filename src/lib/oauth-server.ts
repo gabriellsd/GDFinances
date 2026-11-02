@@ -3,6 +3,8 @@ import { createHash, createPrivateKey, createPublicKey, randomBytes, sign, verif
 import { getSupabaseEnv } from "@/lib/supabase/config";
 
 export const OAUTH_SCOPE = "finance:read";
+export const OAUTH_OFFLINE_ACCESS_SCOPE = "offline_access";
+export const OAUTH_SUPPORTED_SCOPES = [OAUTH_SCOPE, OAUTH_OFFLINE_ACCESS_SCOPE] as const;
 export const ACCESS_TOKEN_TTL = 600;
 export const AUTH_CODE_TTL = 300;
 export const REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30;
