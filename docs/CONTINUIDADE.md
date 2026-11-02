@@ -239,3 +239,210 @@ docs/
 
 **Core no ar: Contas, Transações, Cartões/faturas, Categorias e Dashboard reais.**  
 **Próximo foco: transferências → Relatórios → Calendário → IA.**
+
+---
+
+# Continuidade da integração ChatGPT / MCP — 30/10/2026
+
+> Esta seção registra o trabalho de integração do GDFinances com o ChatGPT via MCP. Ao continuar em outra máquina, leia esta seção antes de alterar código ou fazer deploy.
+
+## Estado atual
+
+**Integração em desenvolvimento; build passou pelas etapas de compilação, lint/tipos e geração de páginas, mas o deploy ainda precisa chegar a READY e as chamadas MCP ainda precisam ser testadas com token válido.**
+
+- Repositório: `gabriellsd/GDFinances`
+- Branch de trabalho: `feat/chatgpt-finance-api`
+- Pull request: https://github.com/gabriellsd/GDFinances/pull/1
+- Último commit desta etapa: `fcbed813040d4ce7756d9ff8ba04530bf2d2adf4`
+- Mensagem: `fix(assistant): simplify dynamic resource query typing`
+- Preview da branch: https://gdfinances-git-feat-chatgpt-finance-api-gabriellsds-projects.vercel.app
+- Painel do último deployment: https://vercel.com/gabriellsds-projects/gdfinances/FN2jrvB4LW2GP1NJRjnasyQEgxJ7
+- Último deployment observado: `dpl_FN2jrvB4LW2GP1NJRjnasyQEgxJ7` — estado observado durante finalização (`BUILDING`). Os logs já mostraram compilação Next.js concluída, verificação de tipos/lint sem erro e geração de 27/27 páginas; confirmar estado final na Vercel.
+- Produção: https://gdfinances.vercel.app — **não foi alterada por este trabalho**.
+
+## Regras importantes de segurança e publicação
+
+1. Trabalhar somente na branch `feat/chatgpt-finance-api` e em Preview.
+2. **Não fazer merge do PR #1 nem publicar em Production sem autorização explícita do proprietário.**
+3. Nunca copiar credenciais, tokens, service-role keys ou conteúdo de `.env.local` para documentação, commits ou mensagens.
+4. Os endpoints devem manter isolamento por usuário: toda consulta precisa filtrar pelo `user_id` autenticado.
+5. Operações que alterem dados financeiros ainda não devem ser liberadas sem desenho de confirmação explícita, validação de autorização e testes. Não inserir/alterar transações diretamente sem entender os efeitos sobre saldos, faturas e parcelas.
+
+## O que foi implementado na branch
+
+### Autenticação e MCP
+
+Arquivo: `src/app/api/assistant/mcp/route.ts`
+
+- Endpoint MCP com suporte a `initialize`, `ping`, `tools/list` e `tools/call`.
+- Encaminhamento de autenticação Bearer/API key para as rotas internas.
+- Tratamento de respostas indefinidas dos handlers com resposta HTTP de erro explícita (commit `15e8dd1`).
+- Ferramentas MCP publicadas no catálogo descrito abaixo.
+
+### Resumo e lançamentos existentes
+
+A rota MCP encaminha para handlers existentes de resumo e transações. Conferir a implementação atual antes de mudar seus contratos.
+
+### Consulta de recursos financeiros
+
+Arquivo: `src/app/api/assistant/resources/route.ts`
+
+Endpoint GET para consulta read-only de recursos, com escopo por usuário, limite de 500 itens e filtros compatíveis com cada recurso.
+
+Recursos implementados:
+- `categories`
+- `accounts`
+- `credit_cards`
+- `credit_card_bills`
+- `installments` (tabela `transaction_installments`)
+- `budgets`
+- `goals`
+- `subscriptions`
+- `investments`
+- `loans`
+- `transfers`
+- `tags`
+- `credit_card_transactions`
+- `goal_contributions`
+- `investment_movements`
+
+Filtros disponíveis conforme o recurso:
+- `from` e `to` no formato `AAAA-MM-DD` para recursos com datas.
+- `status=paid|pending` para parcelas.
+- `type=income|expense` para categorias.
+- `type` para movimentações de investimentos e direção de empréstimos.
+- `active=true|false` para contas e assinaturas.
+
+A consulta valida datas e retorna erro HTTP se houver falha. A query dinâmica faz cast de tabela e seleção para `string` para evitar erro de inferência excessivamente complexa do TypeScript.
+
+### Análises financeiras
+
+Arquivo: `src/app/api/assistant/analytics/route.ts`
+
+Relatórios read-only implementados:
+- fluxo de caixa mensal: receitas, despesas, pagas, pendentes e saldo projetado (receitas menos despesas do período; não representa necessariamente o saldo bancário inicial);
+- despesas por categoria;
+- despesas recorrentes;
+- próximos pagamentos pendentes;
+- visão de cartões e faturas;
+- saúde financeira: contas ativas, investimentos, metas, empréstimos e totais do período.
+
+A agregação monetária usa helper tipado para converter valores numéricos com segurança.
+
+## Ferramentas MCP previstas no catálogo
+
+**15 ferramentas de listagem:**
+1. `list_financial_categories`
+2. `list_financial_accounts`
+3. `list_credit_cards`
+4. `list_credit_card_bills`
+5. `list_financial_installments`
+6. `list_financial_budgets`
+7. `list_financial_goals`
+8. `list_financial_subscriptions`
+9. `list_financial_investments`
+10. `list_financial_loans`
+11. `list_financial_transfers`
+12. `list_financial_tags`
+13. `list_credit_card_transactions`
+14. `list_goal_contributions`
+15. `list_investment_movements`
+
+**6 ferramentas analíticas:**
+- `get_monthly_cashflow`
+- `get_spending_by_category`
+- `get_recurring_expenses`
+- `get_upcoming_payments`
+- `get_credit_card_overview`
+- `get_financial_health`
+
+O total esperado é de 23 ferramentas contando as duas ferramentas iniciais de resumo e lançamentos. Confirmar com `tools/list` no endpoint após autenticação.
+
+## Histórico recente de commits relevantes
+
+| Commit | Descrição |
+|---|---|
+| `2f76b6d` | Endpoint de recursos financeiros read-only |
+| `e6b8153` | Ferramentas MCP para recursos |
+| `71ec79a` | Correção da validação de datas |
+| `9f5546a` | Endpoint de análises financeiras |
+| `6a5fd7d` | Ferramentas MCP de análise |
+| `5b57224` | Remoção de `any` explícito nas análises |
+| `ad916b3` | Remoção de binding não utilizado |
+| `15e8dd1` | Tratamento de respostas indefinidas dos handlers |
+| `fcbed81` | Simplificação da tipagem da query dinâmica de recursos |
+
+## Como retomar em outra máquina
+
+```bash
+git clone https://github.com/gabriellsd/GDFinances.git
+cd GDFinances
+git fetch origin
+git checkout feat/chatgpt-finance-api
+git pull origin feat/chatgpt-finance-api
+npm install
+cp .env.example .env.local
+```
+
+Preencher `.env.local` com as credenciais já existentes do projeto (não incluí-las neste documento). Em seguida:
+
+```bash
+npm run dev
+npm run lint
+npm run build
+```
+
+Antes de começar a codificar, verificar:
+```bash
+git status
+git log -5 --oneline
+```
+
+Não trabalhar diretamente em `main`.
+
+## Próximos passos obrigatórios
+
+### 1. Confirmar Preview
+- [ ] Conferir se o deployment `dpl_FN2jrvB4LW2GP1NJRjnasyQEgxJ7` terminou em `READY`.
+- [ ] Se falhar, abrir os eventos/logs e corrigir o erro real antes de ampliar o escopo.
+- [ ] Verificar que o alias Preview aponta para o deployment correto.
+- [ ] Production permanece intocada.
+
+### 2. Testar protocolo MCP
+- [ ] Fazer chamada sem token e confirmar resposta 401 / metadados OAuth esperados.
+- [ ] Obter token OAuth válido pelo fluxo configurado; nunca registrar token em log/documentação.
+- [ ] Testar `initialize`, `ping`, `tools/list`.
+- [ ] Testar `tools/call` para resumo, lançamentos, ao menos um recurso e cada tipo de análise.
+- [ ] Confirmar isolamento: usuário autenticado só recebe seus próprios dados.
+- [ ] Confirmar filtros de data/status e respostas de erro.
+
+### 3. Conferir qualidade dos dados
+- [ ] Comparar os totais de fluxo de caixa com os valores exibidos no app.
+- [ ] Verificar faturas, parcelas e contas pendentes com dados reais de teste.
+- [ ] Revisar se nomes de campos e tabelas usados nas consultas correspondem ao schema atual.
+- [ ] Avaliar paginação/limite de 500 itens para relatórios maiores.
+
+### 4. Depois dos testes read-only
+- [ ] Melhorar análises (tendências mensais, orçamento x realizado, estabelecimentos/descrições, renovação de assinaturas, dívidas).
+- [ ] Inspecionar os fluxos atuais de criação/edição/pagamento no frontend antes de criar mutações via MCP.
+- [ ] Implementar alterações financeiras somente com prévia + confirmação explícita e proteção contra repetição.
+- [ ] Atualizar esta documentação a cada etapa validada.
+
+## Diagnóstico de erros já encontrados
+
+- Build antigo falhava por `any` explícito em analytics e variável não utilizada no MCP; foram corrigidos.
+- Build seguinte falhava porque handlers poderiam retornar `undefined`; corrigido com fallback `NextResponse.json(..., { status: 500 })`.
+- Build do commit `15e8dd1` revelou erro de tipo no Supabase: “Expression produces a union type that is too complex to represent” em `resources/route.ts:37`.
+- No commit `fcbed81`, a query foi ajustada para `from(config.table as string).select(config.select as string)`. Os logs do deployment seguinte passaram da compilação e da checagem de tipos, geraram 27/27 páginas e entraram em finalização. **Ainda confirmar READY e executar testes de integração.**
+- Um aviso não fatal de dependência ausente em `useEffect` existe em `src/features/create/components/transaction-create-dialog.tsx` (linha aproximada 251).
+
+## Observação sobre configuração Vercel
+
+Durante a configuração, a proteção SSO do Preview foi contornada apenas para o alias Preview. Isso não desativa a autenticação Bearer/OAuth da API. Não alterar proteção ou configurações de Production sem necessidade e autorização.
+
+
+## Guia de conexão do plugin ChatGPT
+
+Foi criado `docs/GUIA_PLUGIN_CHATGPT.md`, com arquitetura, endpoint MCP, ferramentas, autenticação realmente encontrada no código, passos de conexão no ChatGPT para quando OAuth estiver pronto, testes e checklist de pendências.
+
+**Importante:** o servidor MCP e as ferramentas read-only estão implementados, mas a autenticação OAuth 2.1 compatível com MCP/ChatGPT ainda precisa ser implementada ou comprovada de ponta a ponta. A rota de metadados atual, isoladamente, não comprova esse fluxo. Não considerar o plugin pronto nem configurar acesso sem autenticação para dados financeiros reais.

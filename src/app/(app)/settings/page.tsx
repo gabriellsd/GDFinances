@@ -1,11 +1,5 @@
-﻿import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { ApiKeyManager } from "@/components/settings/api-key-manager";
 
 export default function Page() {
-  return (
-    <FeaturePlaceholder
-      title="Configurações"
-      description="Tema, idioma, moeda, notificações e segurança."
-      stage="Etapa 3"
-    />
-  );
+  return <ApiKeyManager />;
 }
