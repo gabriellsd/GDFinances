@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { oauthIssuer, mcpResource } from "@/lib/oauth-server";
+import { oauthIssuer, mcpResource, OAUTH_SUPPORTED_SCOPES } from "@/lib/oauth-server";
 export const dynamic = "force-dynamic";
 export async function GET() {
   const issuer = oauthIssuer();
@@ -14,7 +14,7 @@ export async function GET() {
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none"],
-    scopes_supported: ["finance:read"],
+    scopes_supported: [...OAUTH_SUPPORTED_SCOPES],
     authorization_response_iss_parameter_supported: true,
     client_id_metadata_document_supported: false,
     resource: mcpResource(),
